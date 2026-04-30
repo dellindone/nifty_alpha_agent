@@ -5,6 +5,7 @@ import os
 import ssl
 import threading
 import time
+from pathlib import Path
 from typing import Callable
 from urllib.parse import parse_qs, urlparse
 
@@ -19,7 +20,7 @@ try:
 except Exception:
     _FyersDataSocket = None
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 # Point SSL at certifi's bundle — fixes macOS missing system cert.pem
 os.environ.setdefault("SSL_CERT_FILE", certifi.where())
