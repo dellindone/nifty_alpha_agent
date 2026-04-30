@@ -12,6 +12,7 @@ tokens/
 # Runtime data
 data/
 logs/
+fyers*.log
 
 # Models are committed explicitly — only ignore temp files
 *.tmp
