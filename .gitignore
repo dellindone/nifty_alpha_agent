@@ -1,0 +1,17 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Credentials — NEVER commit these
+.env
+tokens/
+
+# Runtime data
+data/
+logs/
+
+# Models are committed explicitly — only ignore temp files
+*.tmp
