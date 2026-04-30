@@ -16,3 +16,4 @@ fyers*.log
 
 # Models are committed explicitly — only ignore temp files
 *.tmp
+.DS_Store
