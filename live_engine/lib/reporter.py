@@ -53,6 +53,9 @@ class Reporter(BaseReporter):
             )
         self._send(message)
 
+    def send_health_alert(self, message: str) -> None:
+        self._send(message)
+
     def send_exit_alert(self, record: TradeRecord) -> None:
         opt      = "CE" if int(record.direction) == 1 else "PE"
         expiry   = pd.to_datetime(record.expiry_date, errors="coerce")
@@ -266,4 +269,3 @@ class Reporter(BaseReporter):
             sl = float(t.get("current_sl", 0))
             lines.append(f"  {opt} {strike}  exp:{exp}  entry:₹{entry:.0f}  SL:₹{sl:.0f}")
         self._send("\n".join(lines))
-

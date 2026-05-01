@@ -48,6 +48,8 @@ class TradeRecord:
     vix_at_entry: float
     atr_at_entry: float
     model_version: str
+    account_name: str | None = None
+    broker_name: str | None = None
 
 
 TRADE_COLUMNS = [
@@ -79,6 +81,8 @@ TRADE_COLUMNS = [
     "vix_at_entry",
     "atr_at_entry",
     "model_version",
+    "account_name",
+    "broker_name",
 ]
 
 

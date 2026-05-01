@@ -100,3 +100,9 @@ class Risk:
 class Logging:
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
     TELEGRAM_CHAT_ID   = os.getenv("TELEGRAM_CHAT_ID", "")
+
+
+class Trading:
+    BROKER_NAME     = os.getenv("BROKER_NAME", "fyers")
+    ACCOUNT_NAME    = os.getenv("ACCOUNT_NAME", "")
+    INITIAL_CAPITAL = float(os.getenv("INITIAL_CAPITAL", "24000"))

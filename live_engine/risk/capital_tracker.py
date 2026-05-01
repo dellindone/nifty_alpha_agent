@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from config.settings import Trading
+
 logger = logging.getLogger(__name__)
 
 
@@ -33,7 +35,7 @@ SNAPSHOT_COLUMNS = [
 
 
 class CapitalTracker:
-    INITIAL_CAPITAL = 100_000.0
+    INITIAL_CAPITAL = Trading.INITIAL_CAPITAL
 
     def __init__(self, data_dir: Path | None = None, initial_capital: float | None = None, capital_path: Path | None = None) -> None:
         # Backward-compatible construction:

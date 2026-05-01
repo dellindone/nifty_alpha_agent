@@ -1,13 +1,7 @@
-"""Nifty Alpha Agent — entrypoint.
-
-Usage:
-    python main.py --shadow
-    python main.py --live
-    python main.py --shadow --dry-run
-"""
 import argparse
 import logging
 import sys
+from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent / "live_engine"))
@@ -18,10 +12,11 @@ def _setup_logging(verbose: bool) -> None:
     Paths.LOGS.mkdir(parents=True, exist_ok=True)
     log_file = Paths.LOGS / "agent.log"
     level = logging.DEBUG if verbose else logging.INFO
+    handler = TimedRotatingFileHandler(log_file, when="midnight", interval=1, backupCount=7, encoding="utf-8")
     logging.basicConfig(
         level=level,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        handlers=[logging.StreamHandler(), logging.FileHandler(log_file, encoding="utf-8")],
+        handlers=[logging.StreamHandler(), handler],
     )
     sys.stderr = open(log_file, "a", encoding="utf-8", buffering=1)
 
@@ -39,7 +34,10 @@ def main() -> None:
     from engine import Engine
     Paths.DATA_DIRS["nifty"].mkdir(parents=True, exist_ok=True)
     Path("tokens").mkdir(exist_ok=True)
-    engine = Engine(instrument="NIFTY", artifacts_dir=Paths.MODELS)
+    if args.live:
+        engine = Engine(instrument="NIFTY", artifacts_dir=Paths.MODELS, live=True)
+    else:
+        engine = Engine(instrument="NIFTY", artifacts_dir=Paths.MODELS, live=False)
     engine.run()
 
 

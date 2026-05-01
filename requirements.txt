@@ -1,6 +1,7 @@
 # Broker APIs
 # fyers-apiv3 hard-pins aiohttp==3.9.3 — install via: pip install fyers-apiv3 --no-deps
 pyotp>=2.9.0
+growwapi
 aws-lambda-powertools==1.25.5
 websocket-client==1.6.1
 setuptools==68.0.0

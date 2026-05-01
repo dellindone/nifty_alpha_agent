@@ -30,6 +30,8 @@ class TickHandler:
             price = float(ltp)
             if math.isnan(price) or price <= 0:
                 return
+            self._e._last_tick_at = now_utc
+            self._e.health.update("fyers_websocket", "ok", "")
             if symbol_key == FYERS_SYMBOL[self._e.instrument].upper():
                 self._e._last_index_price = price
                 self._e._print_live_display(datetime.now(IST))
@@ -47,6 +49,13 @@ class TickHandler:
                 _send_exit_alert(exit_info)
             self._e._unsubscribe_if_unused(symbol_key)
             self._e._print_live_display(datetime.now(IST))
+
+    def _check_websocket_staleness(self, now_ist: datetime) -> None:
+        if not (now_ist.weekday() < 5 and (now_ist.hour, now_ist.minute) >= (9, 15) and (now_ist.hour, now_ist.minute) <= (15, 30)):
+            return
+        elapsed = int((datetime.now(timezone.utc) - self._e._last_tick_at).total_seconds())
+        if elapsed > 120:
+            self._e.health.update("fyers_websocket", "critical", f"no ticks for {elapsed}s")
 
     def _ensure_subscribed(self, symbols: list[str]) -> None:
         wanted = [str(symbol).upper() for symbol in symbols if str(symbol).strip()]

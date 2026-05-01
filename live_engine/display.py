@@ -16,6 +16,10 @@ class Display:
         time_str = now_ist.strftime("%H:%M:%S IST")
         capital = float(self._e.capital_tracker.current_capital)
         sep = "━" * 63
+        score, overall = self._e.health.score(), self._e.health.overall()
+        bad = self._e.health.checks_in_state("warn") + self._e.health.checks_in_state("critical")
+        names = "  ".join((("⚠️" if c.status == "warn" else "🔴") + " " + c.name.replace("fyers_websocket", "fyers_ws")) for c in bad)
+        health_line = f"  HEALTH  {score} {'✅' if overall == 'ok' else '⚠️' if overall == 'warn' else '🔴'}" + (f"  │  {names}" if names else "")
         trade_lines: list[str] = []
         for snap in self._e.shadow_mode.open_trade_display_snapshots():
             opt, stk, expiry_date = snap["option_type"], snap["strike"], snap["expiry_date"]
@@ -32,7 +36,7 @@ class Display:
         if not trade_lines:
             trade_lines = [sep, f"  PROJ  {d['direction']}  entry~₹{self._e._last_current_premiums.get(self._e.instrument, 0):.0f}  SL~₹{d['sl_price']:.0f}  TP~₹{d['target_price']:.0f}" if d.get("direction") and d.get("sl_price", 0) > 0 else "  no signal  ---  watching"]
         model_line = f"  {d.get('direction','?')}  conf={int(d.get('confidence',0)*100)}%  sl_bin={d.get('sl_bin','?')}  trail={d.get('trail_bin','?')}  tf={d.get('trail_tf','?')}" if d else "  ---"
-        lines = [sep, f"  {'▲' if price > 0 else '─'}  {self._e.instrument}  {price:>10,.2f}    {time_str}    polls: {self._e._poll_count}", f"  VIX  {self._e._last_vix:.1f}   ATR  {self._e._last_atr:.1f}    OPEN  {len(self._e.shadow_mode.open_trades())}    CAP  ₹{capital:,.0f}", *trade_lines, sep, f"  MODEL   {model_line}", f"  DECISION  {self._e._last_decision}", sep]
+        lines = [sep, f"  {'▲' if price > 0 else '─'}  {self._e.instrument}  {price:>10,.2f}    {time_str}    polls: {self._e._poll_count}", f"  VIX  {self._e._last_vix:.1f}   ATR  {self._e._last_atr:.1f}    OPEN  {len(self._e.shadow_mode.open_trades())}    CAP  ₹{capital:,.0f}", health_line, *trade_lines, sep, f"  MODEL   {model_line}", f"  DECISION  {self._e._last_decision}", sep]
         if self._e._display_line_count > 0:
             sys.stdout.write(f"\033[{self._e._display_line_count}A\033[J")
         sys.stdout.write("\n".join(lines) + "\n")
