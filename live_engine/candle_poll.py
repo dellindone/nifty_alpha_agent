@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 import pandas as pd
 
 from config.instruments import FYERS_SYMBOL
-from config.settings import Equity, IST
+from config.settings import Equity, IST, get_instrument_config
 from features.engineering import build_feature_frame
 from ingestion.fyers_client import fyers_client
 
@@ -78,7 +78,7 @@ class CandlePoll:
             today_ist = datetime.now(IST).date()
             self._e._last_daily_pnl, self._e._last_daily_count = self._daily_realized_pnl(today_ist), self._daily_trade_count_today(today_ist)
             date_key = str(today_ist)
-            if self._e._last_daily_pnl >= Equity.DAILY_TARGET and self._e._daily_target_alerted_on != date_key:
+            if self._e._last_daily_pnl >= get_instrument_config(self._e.instrument).daily_target and self._e._daily_target_alerted_on != date_key:
                 self._e.reporter.send_daily_target_alert(self._e._last_daily_pnl)
                 self._e._daily_target_alerted_on = date_key
             if now_ist.hour > 15 or (now_ist.hour == 15 and now_ist.minute >= 15):

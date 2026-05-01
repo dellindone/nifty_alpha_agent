@@ -182,31 +182,37 @@ class FyersClient:
                     "create_cookie": True,
                 },
             ).json()
+            logger.debug(f"Token URL response: {res}")
             if res.get("s") != "ok":
                 logger.error(f"Auth code failed: {res}")
                 return None
-            auth_code = parse_qs(urlparse(res["Url"]).query).get("auth_code", [None])[0]
-
-            sess = fyersModel.SessionModel(
-                client_id=client_id,
-                secret_key=secret_key,
-                redirect_uri=redirect_uri,
-                response_type="code",
-                grant_type="authorization_code",
-            )
-            sess.set_token(auth_code)
-            token_resp = sess.generate_token()
-            if not token_resp or not token_resp.get("access_token"):
-                logger.error(f"Token exchange failed: {token_resp}")
-                return None
+            # Fyers API v3 new flow: data.auth is the access token directly.
+            # Old flow returned a redirect "Url" with auth_code to exchange.
+            if res.get("Url"):
+                auth_code = parse_qs(urlparse(res["Url"]).query).get("auth_code", [None])[0]
+                sess = fyersModel.SessionModel(
+                    client_id=client_id,
+                    secret_key=secret_key,
+                    redirect_uri=redirect_uri,
+                    response_type="code",
+                    grant_type="authorization_code",
+                )
+                sess.set_token(auth_code)
+                token_resp = sess.generate_token()
+                if not token_resp or not token_resp.get("access_token"):
+                    logger.error(f"Token exchange failed: {token_resp}")
+                    return None
+                access_token = token_resp["access_token"]
+            else:
+                access_token = res["data"]["auth"]
 
             fyers_obj = fyersModel.FyersModel(
                 client_id=client_id,
-                token=token_resp["access_token"],
+                token=access_token,
                 is_async=False,
                 log_path="",
             )
-            self._access_token = token_resp["access_token"]
+            self._access_token = access_token
             self._client_id = client_id
             logger.info("Fyers login successful")
             return fyers_obj

@@ -42,16 +42,17 @@ class TradeSignal:
     block_reason: str = ""
 
 
-def lots_for_day(daily_pnl: float, daily_target: float) -> int:
+def lots_for_day(daily_pnl: float, daily_target: float, max_lots: int = 3) -> int:
     remaining = daily_target - daily_pnl
     if remaining <= 0:
         return 0
-    elif remaining < daily_target * 0.33:
-        return 1
+    if remaining < daily_target * 0.33:
+        tier = 1
     elif remaining < daily_target * 0.67:
-        return 2
+        tier = 2
     else:
-        return 3
+        tier = 3
+    return min(tier, max_lots)
 
 
 class SignalHandler:
@@ -80,16 +81,16 @@ class SignalHandler:
         if not prediction.should_trade or prediction.trade_class == "NO_TRADE":
             _block("MODEL_NO_TRADE")
             return None
-        if str(prediction.sl_bin).upper() == "VERY_WIDE":
-            _block("VERY_WIDE_SL")
-            return None
         if float(prediction.confidence) < cfg.min_confidence:
             _block(f"LOW_CONF {float(prediction.confidence):.0%} < {cfg.min_confidence:.0%}")
             return None
+        if float(daily_pnl) <= -abs(cfg.daily_loss_limit):
+            _block(f"DAILY_LOSS_LIMIT pnl=₹{daily_pnl:.0f} limit=₹{cfg.daily_loss_limit}")
+            return None
         max_trades_hit = int(daily_trade_count) >= cfg.max_trades_per_day
-        lots = lots_for_day(float(daily_pnl), cfg.daily_target)
+        lots = lots_for_day(float(daily_pnl), cfg.daily_target, max_lots=cfg.max_lots)
         if not max_trades_hit and lots <= 0:
-            _block(f"NO_LOTS pnl=₹{daily_pnl:.0f}")
+            _block(f"DAILY_TARGET_HIT pnl=₹{daily_pnl:.0f}")
             return None
 
         vix = float(row.get("vix", 0.0))
