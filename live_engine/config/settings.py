@@ -40,7 +40,6 @@ class Equity:
     DAILY_TARGET       = 5_000
     SPREAD_THRESHOLD_PCT = 2.0
 
-
 @dataclass(frozen=True)
 class InstrumentConfig:
     min_confidence: float
