@@ -61,7 +61,7 @@ class MultiTFBuilder:
         if frame_5m is None or frame_5m.empty:
             return frames
 
-        vix_path = DATA_DIR / "INDIAVIX_5.parquet"
+        vix_path = Paths.DATA_DIRS.get(instrument_key.lower(), Paths.DATA) / "INDIAVIX_5.parquet"
         if not vix_path.exists():
             logger.warning("Raw parquet missing for INDIAVIX 5m at %s", vix_path)
             return frames
@@ -102,7 +102,7 @@ class MultiTFBuilder:
         instrument_key = instrument.upper()
 
         for resolution, tf_name in self._resolution_map.items():
-            path = DATA_DIR / f"{instrument_key}_{resolution}.parquet"
+            path = Paths.DATA_DIRS.get(instrument_key.lower(), Paths.DATA) / f"{instrument_key}_{resolution}.parquet"
             if not path.exists():
                 logger.warning("Raw parquet missing for instrument=%s resolution=%s at %s", instrument_key, resolution, path)
                 continue

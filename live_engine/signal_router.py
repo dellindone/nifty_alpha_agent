@@ -4,6 +4,7 @@ from datetime import datetime
 
 import pandas as pd
 
+from config.settings import get_instrument_config
 from lib.signal_handler import TradeSignal
 from ingestion.option_chain import option_chain_service
 
@@ -37,7 +38,7 @@ class SignalRouter:
     def _build_no_signal_decision(self, prediction) -> str:
         if self._e._last_vix > 30.0:
             return f"BLOCKED_VIX_{self._e._last_vix:.1f}"
-        if float(prediction.confidence) < self._e.signal_handler.MIN_CONFIDENCE:
+        if float(prediction.confidence) < get_instrument_config(self._e.instrument).min_confidence:
             return f"LOW_CONF_{float(prediction.confidence):.2f}"
         return "NO_SIGNAL"
 

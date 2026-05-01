@@ -33,21 +33,26 @@ class Reporter(BaseReporter):
         self.telegram_token = str(telegram_token or os.getenv("TELEGRAM_BOT_TOKEN", "") or "")
         self.telegram_chat_id = str(telegram_chat_id or os.getenv("TELEGRAM_CHAT_ID", "") or "")
 
+    def _contract(self, instrument: str, expiry_date, strike: int, option_type: str) -> str:
+        expiry = pd.to_datetime(expiry_date, errors="coerce")
+        exp = expiry.strftime("%d%b").upper() if not pd.isna(expiry) else "?"
+        return f"{str(instrument).upper()}{exp}{int(strike)}{str(option_type).upper()}"
+
     def send_signal_alert(self, signal: TradeSignal, blocked: bool = False) -> None:
-        direction_label = "CE" if signal.direction == 1 else "PE"
+        contract = self._contract(signal.instrument, signal.expiry_date, signal.strike, "CE" if signal.direction == 1 else "PE")
         confidence_pct = int(round(float(signal.confidence) * 100))
         if blocked:
             message = (
-                f"👁 SIGNAL (NOT PUNCHED) — {signal.instrument} {direction_label}\n"
-                f"Strike: {int(signal.strike)} | Expiry: {signal.expiry_date.strftime('%d-%b-%y')}\n"
+                f"👁 SIGNAL (NOT PUNCHED) — {signal.instrument}\n"
+                f"Contract: {contract}\n"
                 f"Entry: ₹{signal.entry_premium:.2f} | SL: ₹{signal.sl_price:.2f} | Target: ₹{signal.target_price:.2f}\n"
                 f"Confidence: {confidence_pct}% | VIX: {signal.vix:.1f}\n"
                 f"Reason: {signal.block_reason}"
             )
         else:
             message = (
-                f"🟢 SHADOW SIGNAL — {signal.instrument} {direction_label}\n"
-                f"Strike: {int(signal.strike)} | Expiry: {signal.expiry_date.strftime('%d-%b-%y')}\n"
+                f"🟢 SHADOW SIGNAL — {signal.instrument}\n"
+                f"Contract: {contract}\n"
                 f"Entry: ₹{signal.entry_premium:.2f} | SL: ₹{signal.sl_price:.2f} | Target: ₹{signal.target_price:.2f}\n"
                 f"Confidence: {confidence_pct}% | VIX: {signal.vix:.1f}"
             )
@@ -57,10 +62,7 @@ class Reporter(BaseReporter):
         self._send(message)
 
     def send_exit_alert(self, record: TradeRecord) -> None:
-        opt      = "CE" if int(record.direction) == 1 else "PE"
-        expiry   = pd.to_datetime(record.expiry_date, errors="coerce")
-        exp_str  = expiry.strftime("%d%b").upper() if not pd.isna(expiry) else "?"
-        contract = f"{record.instrument}{exp_str}{record.strike}{opt}"
+        contract = self._contract(record.instrument, record.expiry_date, record.strike, "CE" if int(record.direction) == 1 else "PE")
         pnl_net  = float(record.pnl_net or 0.0)
         charges  = float(record.charges or 0.0)
         lots     = int(record.lots or 1)
