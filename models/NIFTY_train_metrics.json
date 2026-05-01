@@ -1,50 +1,50 @@
 {
   "instrument": "NIFTY",
-  "direction_accuracy": 0.5443343155638897,
-  "direction_f1": 0.5429757308084903,
-  "phase1_target_mae": 5.584097154829715,
-  "label_target": "trade_class",
+  "direction_accuracy": 0.7884163282752725,
+  "direction_f1": 0.7888910417212152,
+  "phase1_target_mae": 2.056089965071232,
+  "label_target": "direction",
   "walk_forward": {
     "n_folds": 5,
-    "mean_accuracy": 0.511558017520154,
-    "std_accuracy": 0.052074067157306114,
-    "mean_f1": 0.5097998617321906,
-    "std_f1": 0.05246780176272862,
+    "mean_accuracy": 0.7192125010127752,
+    "std_accuracy": 0.07075733646303481,
+    "mean_f1": 0.716649940729044,
+    "std_f1": 0.07183810405922589,
     "folds": [
       {
         "fold": 1,
         "train_size": 500,
-        "val_size": 9853,
-        "direction_accuracy": 0.40982441895869276,
-        "direction_f1": 0.4072454428300952
+        "val_size": 6138,
+        "direction_accuracy": 0.5915607689801238,
+        "direction_f1": 0.5905610653263836
       },
       {
         "fold": 2,
-        "train_size": 10353,
-        "val_size": 9853,
-        "direction_accuracy": 0.5175073581650259,
-        "direction_f1": 0.515632414899946
+        "train_size": 6638,
+        "val_size": 6138,
+        "direction_accuracy": 0.7404692082111437,
+        "direction_f1": 0.7403250153770753
       },
       {
         "fold": 3,
-        "train_size": 20206,
-        "val_size": 9853,
-        "direction_accuracy": 0.5347609865015731,
-        "direction_f1": 0.5342899338679504
+        "train_size": 12776,
+        "val_size": 6138,
+        "direction_accuracy": 0.7005539263603779,
+        "direction_f1": 0.68898640053124
       },
       {
         "fold": 4,
-        "train_size": 30059,
-        "val_size": 9853,
-        "direction_accuracy": 0.5485638891708109,
-        "direction_f1": 0.5444251278235013
+        "train_size": 18914,
+        "val_size": 6138,
+        "direction_accuracy": 0.7740306288693386,
+        "direction_f1": 0.7739645079136086
       },
       {
         "fold": 5,
-        "train_size": 39912,
-        "val_size": 9855,
-        "direction_accuracy": 0.5471334348046677,
-        "direction_f1": 0.5474063892394597
+        "train_size": 25052,
+        "val_size": 6141,
+        "direction_accuracy": 0.789447972642892,
+        "direction_f1": 0.7894127144969116
       }
     ]
   }
