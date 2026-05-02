@@ -42,6 +42,5 @@ def main() -> None:
         engine = Engine(instrument="NIFTY", artifacts_dir=Paths.MODELS, live=False)
     engine.run()
 
-
 if __name__ == "__main__":
     main()
