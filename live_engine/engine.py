@@ -14,6 +14,8 @@ from eod_handler import EODHandler
 from lib.journal import TradeJournal
 from lib.reporter import Reporter
 from lib.signal_handler import SignalHandler
+from health import AgentHealth
+from health_monitor import HealthMonitor
 from shadow_mode import ShadowModeExecutor
 from signal_router import SignalRouter
 from tick_handler import TickHandler
@@ -37,12 +39,14 @@ class Engine:
         self.signal_handler = SignalHandler()
         self.journal = TradeJournal(self.data_dir)
         self.capital_tracker = CapitalTracker(data_dir=self.data_dir)
+        self.reporter = Reporter(self.journal, self.capital_tracker, os.getenv("TELEGRAM_BOT_TOKEN", ""), os.getenv("TELEGRAM_CHAT_ID", ""))
+        self.health = AgentHealth()
+        self.health_monitor = HealthMonitor(self.health, self.reporter)
         if live:
             from live_mode import LiveModeExecutor
-            self.shadow_mode = LiveModeExecutor(journal=self.journal, capital_tracker=self.capital_tracker)
+            self.shadow_mode = LiveModeExecutor(journal=self.journal, capital_tracker=self.capital_tracker, health=self.health)
         else:
             self.shadow_mode = ShadowModeExecutor(journal=self.journal, capital_tracker=self.capital_tracker)
-        self.reporter = Reporter(self.journal, self.capital_tracker, os.getenv("TELEGRAM_BOT_TOKEN", ""), os.getenv("TELEGRAM_CHAT_ID", ""))
         self._running, self._last_daily_pnl, self._last_daily_count = True, 0.0, 0
         self._eod_closed_on = self._summary_sent_on = self._daily_target_alerted_on = self._started_at_ist = self._last_hourly_heartbeat_key = None
         self._tick_stream = tick_stream if tick_stream is not None else fyers_tick_stream
@@ -105,6 +109,7 @@ class Engine:
             self._maybe_send_hourly_heartbeat(now_ist)
             if _is_within_run_window(now_ist):
                 self._run_candle_poll(now_ist) if _market_open(now_ist) else self._log_poll(now_ist, "MARKET_CLOSED")
+            self.health_monitor.check_and_alert()
             self._sleep_until_next_five_minute_mark()
 
     def run(self) -> None:
