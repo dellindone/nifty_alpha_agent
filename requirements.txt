@@ -24,7 +24,7 @@ mibian>=0.1.3
 # Web / HTTP
 httpx>=0.27.0
 aiohttp>=3.11.18,<4.0.0
-requests==2.31.0
+requests==2.32.3
 
 # Database
 sqlalchemy>=2.0.30
