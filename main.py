@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 import sys
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
@@ -29,6 +30,7 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true", help="Log only, no orders")
     parser.add_argument("--verbose", action="store_true", help="Debug logging")
     args = parser.parse_args()
+    os.environ["AGENT_MODE"] = "LIVE" if args.live else "SHADOW"
     _setup_logging(args.verbose)
     from config.settings import Paths
     from engine import Engine
