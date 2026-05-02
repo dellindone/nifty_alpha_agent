@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -20,9 +21,10 @@ class BaseReporter(ABC):
     instrument-specific message formatting; this class owns delivery.
     """
 
-    def __init__(self, telegram_token: str = "", telegram_chat_id: str = "") -> None:
+    def __init__(self, telegram_token: str = "", telegram_chat_id: str = "", mode: str = "") -> None:
         self.telegram_token   = str(telegram_token   or Logging.TELEGRAM_BOT_TOKEN)
         self.telegram_chat_id = str(telegram_chat_id or Logging.TELEGRAM_CHAT_ID)
+        self.mode = str(mode or os.getenv("AGENT_MODE", "SHADOW")).upper()
 
     # ── Abstract interface ────────────────────────────────────────────────────
 
@@ -68,8 +70,9 @@ class BaseReporter(ABC):
         if not self.telegram_token or not self.telegram_chat_id:
             logger.warning("Telegram credentials not configured; skipping send.")
             return
+        tagged_message = f"[{self.mode}] {message}"
         url     = f"https://api.telegram.org/bot{self.telegram_token}/sendMessage"
-        payload = {"chat_id": self.telegram_chat_id, "text": message}
+        payload = {"chat_id": self.telegram_chat_id, "text": tagged_message}
         last_exc: Exception | None = None
         for attempt in range(1, retries + 1):
             try:

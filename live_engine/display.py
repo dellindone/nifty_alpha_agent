@@ -16,6 +16,7 @@ class Display:
         time_str = now_ist.strftime("%H:%M:%S IST")
         capital = float(self._e.capital_tracker.current_capital)
         sep = "━" * 63
+        thin = "─" * 63
         trade_lines: list[str] = []
         for snap in self._e.shadow_mode.open_trade_display_snapshots():
             opt, stk, expiry_date = snap["option_type"], snap["strike"], snap["expiry_date"]
@@ -32,11 +33,45 @@ class Display:
         if not trade_lines:
             trade_lines = [sep, f"  PROJ  {d['direction']}  entry~₹{self._e._last_current_premiums.get(self._e.instrument, 0):.0f}  SL~₹{d['sl_price']:.0f}  TP~₹{d['target_price']:.0f}" if d.get("direction") and d.get("sl_price", 0) > 0 else "  no signal  ---  watching"]
         model_line = f"  {d.get('direction','?')}  conf={int(d.get('confidence',0)*100)}%  sl_bin={d.get('sl_bin','?')}  trail={d.get('trail_bin','?')}  tf={d.get('trail_tf','?')}" if d else "  ---"
+        health_rows: list[str] = []
+        check_order = [
+            "fyers_websocket",
+            "fyers_candle_api",
+            "fyers_vix",
+            "fyers_option_chain",
+            "feature_pipeline",
+            "model_predict",
+            "broker_api",
+            "db_connection",
+        ]
+        now_utc = datetime.now(timezone.utc)
+        for name in check_order:
+            chk = self._e.health._checks.get(name)
+            if chk is None:
+                icon, status_text, age_text = "⚠️", "missing", "n/a"
+            else:
+                icon = "✅" if chk.status == "ok" else ("⚠️" if chk.status == "warn" else "🔴")
+                status_text = str(chk.detail).strip() if str(chk.detail).strip() else "ok"
+                age_sec = int(max(0, (now_utc - chk.last_updated).total_seconds()))
+                age_text = f"{age_sec}s ago" if age_sec < 60 else f"{age_sec // 60}m {age_sec % 60}s ago"
+            short = name[6:] if name.startswith("fyers_") else name
+            health_rows.append(f"  {icon} {short[:16]:<16} {status_text}  {age_text}")
         score, overall = self._e.health.score(), self._e.health.overall()
-        bad = self._e.health.checks_in_state("warn") + self._e.health.checks_in_state("critical")
-        names = "  ".join((("⚠️" if c.status == "warn" else "🔴") + " " + c.name.replace("fyers_websocket", "fyers_ws")) for c in bad)
-        health_line = f"  HEALTH  {score} {'✅' if overall == 'ok' else '⚠️' if overall == 'warn' else '🔴'}" + (f"  │  {names}" if names else "")
-        lines = [sep, f"  {'▲' if price > 0 else '─'}  {self._e.instrument}  {price:>10,.2f}    {time_str}    polls: {self._e._poll_count}", f"  VIX  {self._e._last_vix:.1f}   ATR  {self._e._last_atr:.1f}    OPEN  {len(self._e.shadow_mode.open_trades())}    CAP  ₹{capital:,.0f}", health_line, *trade_lines, sep, f"  MODEL   {model_line}", f"  DECISION  {self._e._last_decision}", sep]
+        overall_icon = "✅" if overall == "ok" else ("⚠️" if overall == "warn" else "🔴")
+        lines = [
+            sep,
+            f"  {'▲' if price > 0 else '─'}  {self._e.instrument}  {price:>10,.2f}    {time_str}    polls: {self._e._poll_count}",
+            f"  VIX  {self._e._last_vix:.1f}   ATR  {self._e._last_atr:.1f}    OPEN  {len(self._e.shadow_mode.open_trades())}    CAP  ₹{capital:,.0f}",
+            thin,
+            *health_rows,
+            f"  SCORE  {score}/100  {overall_icon}  {overall}",
+            thin,
+            *trade_lines,
+            sep,
+            f"  MODEL   {model_line}",
+            f"  DECISION  {self._e._last_decision}",
+            sep,
+        ]
         if self._e._display_line_count > 0:
             sys.stdout.write(f"\033[{self._e._display_line_count}A\033[J")
         sys.stdout.write("\n".join(lines) + "\n")
