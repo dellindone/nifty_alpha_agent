@@ -26,7 +26,7 @@ from utils.market_calendar import is_trading_day
 
 logger = logging.getLogger(__name__)
 class Engine:
-    def __init__(self, instrument: str, artifacts_dir: str | Path, tick_stream=None) -> None:
+    def __init__(self, instrument: str, artifacts_dir: str | Path, tick_stream=None, live: bool = False) -> None:
         self.instrument = instrument.upper()
         path = Path(artifacts_dir)
         self.artifacts_dir = path if path.is_absolute() else (Paths.ROOT / path).resolve()
@@ -37,7 +37,11 @@ class Engine:
         self.signal_handler = SignalHandler()
         self.journal = TradeJournal(self.data_dir)
         self.capital_tracker = CapitalTracker(data_dir=self.data_dir)
-        self.shadow_mode = ShadowModeExecutor(journal=self.journal, capital_tracker=self.capital_tracker)
+        if live:
+            from live_mode import LiveModeExecutor
+            self.shadow_mode = LiveModeExecutor(journal=self.journal, capital_tracker=self.capital_tracker)
+        else:
+            self.shadow_mode = ShadowModeExecutor(journal=self.journal, capital_tracker=self.capital_tracker)
         self.reporter = Reporter(self.journal, self.capital_tracker, os.getenv("TELEGRAM_BOT_TOKEN", ""), os.getenv("TELEGRAM_CHAT_ID", ""))
         self._running, self._last_daily_pnl, self._last_daily_count = True, 0.0, 0
         self._eod_closed_on = self._summary_sent_on = self._daily_target_alerted_on = self._started_at_ist = self._last_hourly_heartbeat_key = None
