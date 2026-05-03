@@ -58,6 +58,7 @@ paper_trade = Table(
     Column("current_sl", Float, nullable=True),
     Column("highest_premium", Float, nullable=True),
     Column("model_version", Text, nullable=False),
+    Column("model_name", Text, nullable=True),
 )
 
 
@@ -127,6 +128,9 @@ def _ensure_override_column_exists(engine: Engine) -> None:
             if "highest_premium" not in cols:
                 conn.execute(text("ALTER TABLE paper_trade ADD COLUMN highest_premium FLOAT"))
                 logger.info("Added missing paper_trade.highest_premium column")
+            if "model_name" not in cols:
+                conn.execute(text("ALTER TABLE paper_trade ADD COLUMN model_name TEXT"))
+                logger.info("Added missing paper_trade.model_name column")
     except Exception as exc:
         logger.warning("Failed to add missing columns on paper_trade: %s", exc)
 
