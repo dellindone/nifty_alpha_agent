@@ -171,8 +171,16 @@ class ReplayRunner:
                 reason = "EOD_EXIT"
             if reason:
                 pnl = (move - 0.05) * LOT_SIZES.get(self.instrument, 50) * t.lots
+                icon = "✅" if pnl >= 0 else "🔴"
+                direction_label = "CE" if t.direction == 1 else "PE"
                 logger.info("REPLAY_EXIT trade_id=%s reason=%s pnl=₹%.0f bars=%d", t.trade_id, reason, pnl, t.bars_held)
                 print(f"  [{now_ist.strftime('%H:%M')}] EXIT {reason}  move={move:+.1f}  pnl=₹{pnl:,.0f}  bars={t.bars_held}")
+                self.reporter._send(
+                    f"[REPLAY {self.replay_date} {now_ist.strftime('%H:%M')} IST]\n"
+                    f"{icon} EXIT {reason} — {self.instrument} {direction_label}\n"
+                    f"Move: {move:+.1f} pts | Bars held: {t.bars_held}\n"
+                    f"PnL: ₹{pnl:,.0f}"
+                )
             else:
                 still_open.append(t)
         self._open_trades = still_open
