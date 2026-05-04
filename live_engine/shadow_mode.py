@@ -200,7 +200,8 @@ class ShadowMode:
             premium = float(current_premium)
             if premium <= trade.current_sl:
                 reason = "TRAIL_SL" if trade.trail_active else "SL_HIT"
-                info = self._close_trade(trade_id, premium, reason, current_time)
+                exit_premium = max(premium, trade.current_sl)
+                info = self._close_trade(trade_id, exit_premium, reason, current_time)
                 if info:
                     closed.append(info)
                 continue
