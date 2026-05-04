@@ -15,10 +15,14 @@ from sqlalchemy import select
 
 from base.journal import BaseJournal
 from utils.charge_calculator import calculate_charges
-from db import ensure_table_exists, get_engine, paper_trade, upsert_trade
+from db import ensure_table_exists, get_engine, live_trade, paper_trade, upsert_live_trade, upsert_trade
 from config.settings import Paths
 
 logger = logging.getLogger(__name__)
+
+_IS_LIVE = os.getenv("AGENT_MODE", "SHADOW").upper() == "LIVE"
+_trade_table = live_trade if _IS_LIVE else paper_trade
+_upsert_fn = upsert_live_trade if _IS_LIVE else upsert_trade
 
 
 @dataclass
@@ -133,7 +137,7 @@ class Journal(BaseJournal):
         if self._engine is None:
             return None
         try:
-            stmt = select(paper_trade).order_by(paper_trade.c.timestamp_entry)
+            stmt = select(_trade_table).order_by(_trade_table.c.timestamp_entry)
             with self._engine.connect() as conn:
                 result = conn.execute(stmt)
                 rows = [dict(row._mapping) for row in result]
@@ -150,9 +154,9 @@ class Journal(BaseJournal):
             return None
         try:
             stmt = (
-                select(paper_trade)
-                .where(paper_trade.c.timestamp_exit.is_(None))
-                .order_by(paper_trade.c.timestamp_entry)
+                select(_trade_table)
+                .where(_trade_table.c.timestamp_exit.is_(None))
+                .order_by(_trade_table.c.timestamp_entry)
             )
             with self._engine.connect() as conn:
                 result = conn.execute(stmt)
@@ -191,8 +195,10 @@ class Journal(BaseJournal):
         row = asdict(record)
         if not row.get("trade_id"):
             row["trade_id"] = str(uuid4())
+        if _IS_LIVE:
+            row.setdefault("trade_state", "OPEN")
         if self._engine is not None:
-            upsert_trade(self._engine, row)
+            _upsert_fn(self._engine, row)
         else:
             all_trades = self._load_from_parquet()
             new_row = pd.DataFrame([row]).dropna(axis=1, how="all")
@@ -261,7 +267,9 @@ class Journal(BaseJournal):
 
         # Always update DB (primary source).
         updated_row = dict(row) | exit_updates
-        upsert_trade(self._engine, updated_row)
+        if _IS_LIVE:
+            updated_row.setdefault("trade_state", "CLOSED")
+        _upsert_fn(self._engine, updated_row)
 
     def update_trade(self, trade_id: str, updates: dict) -> None:
         all_trades = self._load_from_parquet()
@@ -280,7 +288,7 @@ class Journal(BaseJournal):
             .iloc[-1]
             .to_dict()
         )
-        upsert_trade(self._engine, updated_row)
+        _upsert_fn(self._engine, updated_row)
 
     def update_trade_state(self, trade_id: str, *, current_sl: float, highest_premium: float, trail_active: bool = False, lots: int | None = None) -> None:
         all_trades = self._load_from_parquet()
@@ -301,7 +309,7 @@ class Journal(BaseJournal):
             .iloc[-1]
             .to_dict()
         )
-        upsert_trade(self._engine, updated_row)
+        _upsert_fn(self._engine, updated_row)
 
     def open_trades(self) -> pd.DataFrame:
         return self.load_open_trades()
