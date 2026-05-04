@@ -58,7 +58,7 @@ class InstrumentConfig:
 
 INSTRUMENT_CONFIGS: dict[str, InstrumentConfig] = {
     "NIFTY": InstrumentConfig(
-        min_confidence=0.90,
+        min_confidence=0.55,
         min_rr=1.2,
         max_trades_per_day=6,
         daily_target=5_000,
