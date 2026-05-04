@@ -200,17 +200,27 @@ class ShadowMode:
                 continue
 
             premium = float(current_premium)
+            cfg = get_instrument_config(trade.signal.instrument)
+
+            # Hard target exit
+            if premium >= trade.current_target:
+                info = self._close_trade(trade_id, premium, "TARGET_HIT", current_time)
+                if info:
+                    closed.append(info)
+                continue
+
             if premium <= trade.current_sl:
-                reason = "TRAIL_SL" if trade.trail_active else "SL_HIT"
+                reason = "TRAIL_STOP" if trade.trail_active else "SL_HIT"
                 exit_premium = max(premium, trade.current_sl)
                 info = self._close_trade(trade_id, exit_premium, reason, current_time)
                 if info:
                     closed.append(info)
                 continue
-            cfg = get_instrument_config(trade.signal.instrument)
+
+            # Trail activates when premium moves >= trail_activation_rr × sl_distance (same as replay)
             act_price = (
                 float(trade.signal.entry_premium)
-                + float(trade.signal.target_price) * cfg.trail_activation_rr
+                + float(trade.signal.sl_price) * cfg.trail_activation_rr
             )
             if premium >= act_price and not trade.trail_active:
                 trade.trail_active = True
@@ -362,7 +372,7 @@ class ShadowMode:
         except Exception as exc:
             logger.error("release_margin failed trade_id=%s error=%s", trade_id, exc)
 
-        display_reason = "TARGET_HIT" if str(reason) in {"TARGET_HIT", "TRAIL_SL"} else str(reason)
+        display_reason = str(reason)
         return {
             "trade_id": trade_id,
             "instrument": trade.signal.instrument.upper(),
