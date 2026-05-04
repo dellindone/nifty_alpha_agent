@@ -102,6 +102,9 @@ class ShadowMode:
                 current_sl = float(persisted_sl) if pd.notna(persisted_sl) else (entry_premium - sl_price)
                 highest_premium = float(persisted_peak) if pd.notna(persisted_peak) else entry_premium
 
+                opt_sym = str(row.get("option_symbol") or "").upper()
+                if not opt_sym:
+                    opt_sym = self._resolve_symbol_from_row(row) or ""
                 trade = ShadowTrade(
                     trade_id=trade_id,
                     signal=signal,
@@ -111,7 +114,7 @@ class ShadowMode:
                     current_target=entry_premium + target_price,
                     trail_active=bool(row.get("trail_active", False)),
                     lots=int(float(row.get("lots", 1) or 1)),
-                    option_symbol=str(row.get("option_symbol") or "").upper(),
+                    option_symbol=opt_sym,
                 )
                 self._open[trade_id] = trade
                 self._last_trail_update[trade_id] = datetime.now(timezone.utc)
@@ -126,6 +129,46 @@ class ShadowMode:
 
         if restored:
             logger.info("restore_open_trades count=%d", restored)
+
+    def _resolve_symbol_from_row(self, row) -> str | None:
+        """Resolve Fyers option symbol from trade row fields via the option chain CSV."""
+        try:
+            from ingestion.option_chain import option_chain_service
+            from datetime import datetime as _dt
+            instrument = str(row.get("instrument", "")).upper()
+            strike = int(float(row.get("strike", 0) or 0))
+            option_type = str(row.get("option_type", "")).upper()
+            expiry_ts = pd.to_datetime(row.get("expiry_date"), errors="coerce")
+            if not instrument or strike <= 0 or option_type not in {"CE", "PE"} or pd.isna(expiry_ts):
+                return None
+            csv_df = option_chain_service._fetch_csv(instrument)
+            if csv_df is None or csv_df.empty:
+                return None
+            strike_mask = pd.to_numeric(csv_df[15], errors="coerce") == float(strike)
+            type_mask = csv_df[9].astype(str).str.upper().str.endswith(option_type)
+            def _matches(sym: str) -> bool:
+                try:
+                    rest = sym.split(":")[-1][len(instrument):]
+                    if len(rest) < 5:
+                        return False
+                    if rest[2:5].isalpha():
+                        parsed = _dt.strptime(rest[:5], "%y%b")
+                        return parsed.year == expiry_ts.year and parsed.month == expiry_ts.month
+                    month_map = {"O": 10, "N": 11, "D": 12}
+                    m_char = rest[2]
+                    from datetime import date as _date
+                    return _date(2000 + int(rest[:2]), month_map.get(m_char, int(m_char)), int(rest[3:5])) == expiry_ts.date()
+                except Exception:
+                    return False
+            matched = csv_df[strike_mask & type_mask & csv_df[9].astype(str).apply(_matches)]
+            if matched.empty:
+                return None
+            sym = str(matched.iloc[0][9])
+            logger.info("restore: resolved option_symbol=%s for trade_id=%s", sym, row.get("trade_id"))
+            return sym if sym else None
+        except Exception as exc:
+            logger.warning("restore: failed to resolve option_symbol: %s", exc)
+            return None
 
     def enter_trade(self, signal: TradeSignal, option_symbol: str = "") -> ShadowTrade | None:
         instrument = signal.instrument.upper()
