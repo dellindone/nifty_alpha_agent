@@ -91,6 +91,10 @@ live_trade = Table(
     Column("direction_prob", Float, nullable=False),
     Column("model_version", Text, nullable=False),
     Column("trade_state", Text, nullable=False),
+    Column("broker_order_id", Text, nullable=True),
+    Column("broker_exit_order_id", Text, nullable=True),
+    Column("fill_price", Float, nullable=True),
+    Column("exit_fill_price", Float, nullable=True),
     Column("exit_reason", Text, nullable=True),
     Column("pnl_gross", Float, nullable=True),
     Column("pnl_net", Float, nullable=True),
@@ -139,14 +143,15 @@ def ensure_table_exists(engine: Engine | None) -> None:
     if engine is None:
         return
     try:
-        metadata.create_all(engine, tables=[paper_trade], checkfirst=True)
-        _ensure_override_column_exists(engine)
+        metadata.create_all(engine, tables=[paper_trade, live_trade], checkfirst=True)
+        _ensure_missing_columns(engine)
     except Exception as exc:
-        logger.warning("Failed to ensure paper_trade table exists: %s", exc)
+        logger.warning("Failed to ensure tables exist: %s", exc)
 
 
-def _ensure_override_column_exists(engine: Engine) -> None:
-    missing = {
+def _ensure_missing_columns(engine: Engine) -> None:
+    is_pg = str(engine.url).startswith("postgresql")
+    paper_missing = {
         "override": "BOOLEAN NOT NULL DEFAULT false",
         "initial_sl_price": "FLOAT",
         "lots": "INTEGER",
@@ -155,12 +160,21 @@ def _ensure_override_column_exists(engine: Engine) -> None:
         "highest_premium": "FLOAT",
         "model_name": "TEXT",
         "option_symbol": "TEXT",
+        "account_name": "TEXT",
+        "broker_name": "TEXT",
     }
     try:
         with engine.begin() as conn:
-            conn.execute(text("SET LOCAL statement_timeout = 0"))
-            for name, ddl in missing.items():
-                conn.execute(text(f"ALTER TABLE paper_trade ADD COLUMN IF NOT EXISTS {name} {ddl}"))
+            if is_pg:
+                conn.execute(text("SET LOCAL statement_timeout = 0"))
+            for name, ddl in paper_missing.items():
+                if is_pg:
+                    conn.execute(text(f"ALTER TABLE paper_trade ADD COLUMN IF NOT EXISTS {name} {ddl}"))
+                else:
+                    try:
+                        conn.execute(text(f"ALTER TABLE paper_trade ADD COLUMN {name} {ddl}"))
+                    except Exception:
+                        pass  # column already exists on SQLite
     except Exception as exc:
         logger.warning("Failed to add missing columns on paper_trade: %s", exc)
 
@@ -236,6 +250,17 @@ def upsert_trade(engine: Engine | None, record: dict) -> None:
             conn.execute(stmt)
     except Exception as exc:
         logger.warning("Failed to upsert trade into DB: %s", exc)
+
+
+def check_db_health(engine) -> tuple[str, str]:
+    if engine is None:
+        return ("warn", "no DB engine (parquet-only mode)")
+    try:
+        with engine.connect():
+            pass
+        return ("ok", "")
+    except Exception as exc:
+        return ("critical", str(exc))
 
 
 def upsert_live_trade(engine: Engine | None, record: dict) -> None:

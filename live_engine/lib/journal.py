@@ -53,6 +53,8 @@ class TradeRecord:
     atr_at_entry: float
     model_version: str
     option_symbol: str = ""
+    account_name: str | None = None
+    broker_name: str | None = None
 
 
 TRADE_COLUMNS = [
