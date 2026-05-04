@@ -142,7 +142,7 @@ class Journal(BaseJournal):
                 return pd.DataFrame(columns=TRADE_COLUMNS)
             return self._ensure_shape(df)
         except Exception as exc:
-            logger.warning("DB load_all failed, falling back to parquet: %s", exc)
+            logger.warning("DB load_all failed: %s", exc)
             return None
 
     def _load_open_from_db(self) -> pd.DataFrame | None:
@@ -162,7 +162,7 @@ class Journal(BaseJournal):
                 return pd.DataFrame(columns=TRADE_COLUMNS)
             return self._ensure_shape(df)
         except Exception as exc:
-            logger.warning("DB load_open_trades failed, falling back to parquet: %s", exc)
+            logger.warning("DB load_open_trades failed: %s", exc)
             return None
 
     def load_all(self) -> pd.DataFrame:
@@ -191,12 +191,13 @@ class Journal(BaseJournal):
         row = asdict(record)
         if not row.get("trade_id"):
             row["trade_id"] = str(uuid4())
-
-        all_trades = self._load_from_parquet()
-        new_row = pd.DataFrame([row]).dropna(axis=1, how="all")
-        updated = pd.concat([all_trades, new_row], ignore_index=True)
-        self._persist(updated)
-        upsert_trade(self._engine, row)
+        if self._engine is not None:
+            upsert_trade(self._engine, row)
+        else:
+            all_trades = self._load_from_parquet()
+            new_row = pd.DataFrame([row]).dropna(axis=1, how="all")
+            updated = pd.concat([all_trades, new_row], ignore_index=True)
+            self._persist(updated)
 
     def log_exit(
         self,
