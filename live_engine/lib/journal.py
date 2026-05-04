@@ -50,6 +50,7 @@ class TradeRecord:
     model_version: str
     account_name: str | None = None
     broker_name: str | None = None
+    option_symbol: str = ""
 
 
 TRADE_COLUMNS = [
@@ -83,6 +84,7 @@ TRADE_COLUMNS = [
     "model_version",
     "account_name",
     "broker_name",
+    "option_symbol",
 ]
 
 

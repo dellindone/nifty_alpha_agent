@@ -111,6 +111,7 @@ class ShadowMode:
                     current_target=entry_premium + target_price,
                     trail_active=bool(row.get("trail_active", False)),
                     lots=int(float(row.get("lots", 1) or 1)),
+                    option_symbol=str(row.get("option_symbol") or "").upper(),
                 )
                 self._open[trade_id] = trade
                 self._last_trail_update[trade_id] = datetime.now(timezone.utc)
@@ -179,6 +180,7 @@ class ShadowMode:
             vix_at_entry=float(signal.vix),
             atr_at_entry=float(signal.atr),
             model_version=self.model_version,
+            option_symbol=str(option_symbol).upper(),
         )
         self.journal.log_entry(record)
         self.journal.update_trade_state(
