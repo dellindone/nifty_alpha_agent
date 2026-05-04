@@ -1,0 +1,13 @@
+{
+  "version": "v4_oos_2025",
+  "promoted_at": "2026-05-04",
+  "trained_on": "2022-01-03 -> 2025-12-31",
+  "label_mode": "barrier",
+  "label_min_rr": 2.0,
+  "wf_mean_accuracy": 0.5116,
+  "wf_mean_f1": 0.5098,
+  "direction_accuracy": 0.5443,
+  "status": "live",
+  "promoted_from": "trading_research/nifty/experiments/v4_oos_2025",
+  "note": "OOS-validated on 2025 data. Used in live trading."
+}
