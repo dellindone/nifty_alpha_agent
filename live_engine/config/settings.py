@@ -8,10 +8,12 @@ IST = pytz.timezone("Asia/Kolkata")
 
 
 class Paths:
-    ROOT      = Path(__file__).resolve().parents[2]
-    DATA      = ROOT / "data"
-    MODELS    = ROOT / "models"
-    LOGS      = ROOT / "logs"
+    ROOT          = Path(__file__).resolve().parents[2]
+    DATA          = ROOT / "data"
+    MODELS        = ROOT / "models"          # legacy — prefer mode-specific paths below
+    MODELS_SHADOW = ROOT / "models" / "shadow"
+    MODELS_LIVE   = ROOT / "models" / "live"
+    LOGS          = ROOT / "logs"
 
     DATA_DIRS = {
         "nifty": DATA / "nifty",

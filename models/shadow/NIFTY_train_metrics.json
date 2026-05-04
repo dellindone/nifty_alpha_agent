@@ -1,0 +1,51 @@
+{
+  "instrument": "NIFTY",
+  "direction_accuracy": 0.5642863094742104,
+  "direction_f1": 0.5492560488808462,
+  "phase1_target_mae": 2.1307050746313356,
+  "label_target": "trade_class",
+  "walk_forward": {
+    "n_folds": 5,
+    "mean_accuracy": 0.5275517263065217,
+    "std_accuracy": 0.0574912375534028,
+    "mean_f1": 0.5179078529929532,
+    "std_f1": 0.0580072768281333,
+    "folds": [
+      {
+        "fold": 1,
+        "train_size": 500,
+        "val_size": 15901,
+        "direction_accuracy": 0.4138104521728193,
+        "direction_f1": 0.4031314292946448
+      },
+      {
+        "fold": 2,
+        "train_size": 16401,
+        "val_size": 15901,
+        "direction_accuracy": 0.5444940569775486,
+        "direction_f1": 0.5411719765854701
+      },
+      {
+        "fold": 3,
+        "train_size": 32302,
+        "val_size": 15901,
+        "direction_accuracy": 0.5493365197157412,
+        "direction_f1": 0.5339295539520605
+      },
+      {
+        "fold": 4,
+        "train_size": 48203,
+        "val_size": 15901,
+        "direction_accuracy": 0.5624174580215081,
+        "direction_f1": 0.5569306031898478
+      },
+      {
+        "fold": 5,
+        "train_size": 64104,
+        "val_size": 15901,
+        "direction_accuracy": 0.5677001446449909,
+        "direction_f1": 0.5543757019427424
+      }
+    ]
+  }
+}

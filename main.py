@@ -52,7 +52,7 @@ def main() -> None:
         from replay import ReplayRunner
         runner = ReplayRunner(
             instrument="NIFTY",
-            artifacts_dir=Paths.MODELS,
+            artifacts_dir=Paths.MODELS_SHADOW,
             replay_date=args.date,
             dataset_path=args.dataset,
             speed=args.speed,
@@ -73,9 +73,9 @@ def main() -> None:
     Paths.DATA_DIRS["nifty"].mkdir(parents=True, exist_ok=True)
     Path("tokens").mkdir(exist_ok=True)
     if args.live:
-        engine = Engine(instrument="NIFTY", artifacts_dir=Paths.MODELS, live=True)
+        engine = Engine(instrument="NIFTY", artifacts_dir=Paths.MODELS_LIVE, live=True)
     else:
-        engine = Engine(instrument="NIFTY", artifacts_dir=Paths.MODELS, live=False)
+        engine = Engine(instrument="NIFTY", artifacts_dir=Paths.MODELS_SHADOW, live=False)
     engine.run()
 
 
