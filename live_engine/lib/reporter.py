@@ -104,8 +104,11 @@ class Reporter(BaseReporter):
             self._send(message)
             return
 
-        closed = today_df[today_df["timestamp_exit"].notna()].copy()
-        total_trades = int(len(today_df))
+        closed = today_df[
+            today_df["timestamp_exit"].notna()
+            & (today_df["exit_reason"].astype(str) != "MANUAL_CLEANUP")
+        ].copy()
+        total_trades = int(len(closed))
         if closed.empty:
             wins = 0
             losses = 0
@@ -173,7 +176,11 @@ class Reporter(BaseReporter):
         if not df.empty:
             exit_ts = pd.to_datetime(df["timestamp_exit"], errors="coerce", utc=True)
             ist_dates = exit_ts.dt.tz_convert(IST).dt.date
-            closed_df = df[(ist_dates == today) & df["timestamp_exit"].notna()].copy()
+            closed_df = df[
+                (ist_dates == today)
+                & df["timestamp_exit"].notna()
+                & (df["exit_reason"].astype(str) != "MANUAL_CLEANUP")
+            ].copy()
 
         net_series   = pd.to_numeric(closed_df["pnl_net"],   errors="coerce").fillna(0.0) if not closed_df.empty else pd.Series([], dtype=float)
         gross_series = pd.to_numeric(closed_df["pnl_gross"], errors="coerce").fillna(0.0) if not closed_df.empty else pd.Series([], dtype=float)
