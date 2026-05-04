@@ -3,7 +3,9 @@
 Usage:
     python main.py --shadow
     python main.py --live
-    python main.py --shadow --dry-run
+    python main.py --replay --date 2026-05-04
+    python main.py --replay --date 2026-05-04 --dataset /path/to/features.parquet
+    python main.py --replay --date 2026-05-04 --speed 2
 """
 import argparse
 import fcntl
@@ -33,9 +35,31 @@ def main() -> None:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--shadow", action="store_true", help="Paper trade")
     mode.add_argument("--live", action="store_true", help="Live trading")
+    mode.add_argument("--replay", action="store_true", help="Replay historical date through live pipeline")
+    parser.add_argument("--date", default=None, help="Date to replay: YYYY-MM-DD (required with --replay)")
+    parser.add_argument("--dataset", default=None, help="Feature parquet path (optional, uses default OOS dataset)")
+    parser.add_argument("--speed", type=float, default=0.0, help="Seconds to pause between bars (0=instant)")
     parser.add_argument("--dry-run", action="store_true", help="Log only, no orders")
     parser.add_argument("--verbose", action="store_true", help="Debug logging")
     args = parser.parse_args()
+
+    if args.replay:
+        if not args.date:
+            parser.error("--replay requires --date YYYY-MM-DD")
+        os.environ["AGENT_MODE"] = "SHADOW"
+        _setup_logging(args.verbose)
+        from config.settings import Paths
+        from replay import ReplayRunner
+        runner = ReplayRunner(
+            instrument="NIFTY",
+            artifacts_dir=Paths.MODELS,
+            replay_date=args.date,
+            dataset_path=args.dataset,
+            speed=args.speed,
+        )
+        runner.run()
+        return
+
     os.environ["AGENT_MODE"] = "LIVE" if args.live else "SHADOW"
     _setup_logging(args.verbose)
     _pid_lock = open("/tmp/nifty_alpha_agent.lock", "w")
