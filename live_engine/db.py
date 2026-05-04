@@ -111,6 +111,7 @@ def _ensure_override_column_exists(engine: Engine) -> None:
     try:
         cols = {c["name"] for c in inspect(engine).get_columns("paper_trade")}
         with engine.begin() as conn:
+            conn.execute(text("SET LOCAL statement_timeout = 0"))
             if "override" not in cols:
                 conn.execute(text("ALTER TABLE paper_trade ADD COLUMN override BOOLEAN NOT NULL DEFAULT false"))
                 logger.info("Added missing paper_trade.override column")
