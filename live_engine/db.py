@@ -108,34 +108,21 @@ def ensure_table_exists(engine: Engine | None) -> None:
 
 
 def _ensure_override_column_exists(engine: Engine) -> None:
+    missing = {
+        "override": "BOOLEAN NOT NULL DEFAULT false",
+        "initial_sl_price": "FLOAT",
+        "lots": "INTEGER",
+        "trail_active": "BOOLEAN NOT NULL DEFAULT false",
+        "current_sl": "FLOAT",
+        "highest_premium": "FLOAT",
+        "model_name": "TEXT",
+        "option_symbol": "TEXT",
+    }
     try:
-        cols = {c["name"] for c in inspect(engine).get_columns("paper_trade")}
         with engine.begin() as conn:
             conn.execute(text("SET LOCAL statement_timeout = 0"))
-            if "override" not in cols:
-                conn.execute(text("ALTER TABLE paper_trade ADD COLUMN override BOOLEAN NOT NULL DEFAULT false"))
-                logger.info("Added missing paper_trade.override column")
-            if "initial_sl_price" not in cols:
-                conn.execute(text("ALTER TABLE paper_trade ADD COLUMN initial_sl_price FLOAT"))
-                logger.info("Added missing paper_trade.initial_sl_price column")
-            if "lots" not in cols:
-                conn.execute(text("ALTER TABLE paper_trade ADD COLUMN lots INTEGER"))
-                logger.info("Added missing paper_trade.lots column")
-            if "trail_active" not in cols:
-                conn.execute(text("ALTER TABLE paper_trade ADD COLUMN trail_active BOOLEAN NOT NULL DEFAULT false"))
-                logger.info("Added missing paper_trade.trail_active column")
-            if "current_sl" not in cols:
-                conn.execute(text("ALTER TABLE paper_trade ADD COLUMN current_sl FLOAT"))
-                logger.info("Added missing paper_trade.current_sl column")
-            if "highest_premium" not in cols:
-                conn.execute(text("ALTER TABLE paper_trade ADD COLUMN highest_premium FLOAT"))
-                logger.info("Added missing paper_trade.highest_premium column")
-            if "model_name" not in cols:
-                conn.execute(text("ALTER TABLE paper_trade ADD COLUMN model_name TEXT"))
-                logger.info("Added missing paper_trade.model_name column")
-            if "option_symbol" not in cols:
-                conn.execute(text("ALTER TABLE paper_trade ADD COLUMN option_symbol TEXT"))
-                logger.info("Added missing paper_trade.option_symbol column")
+            for name, ddl in missing.items():
+                conn.execute(text(f"ALTER TABLE paper_trade ADD COLUMN IF NOT EXISTS {name} {ddl}"))
     except Exception as exc:
         logger.warning("Failed to add missing columns on paper_trade: %s", exc)
 
