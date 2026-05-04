@@ -44,7 +44,7 @@ def fetch_live_frames(engine, now_ist: datetime) -> dict[str, pd.DataFrame]:
         except Exception as exc:
             engine.health.update("fyers_candle_api", "critical", str(exc)); logger.error("candle_poll failed instrument=%s error=%s", symbol, exc); return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
     sym = FYERS_SYMBOL[engine.instrument]
-    frame_5m = _cached(sym, "5", lambda s, r: _fetch(s, r, 200, 30)); frame_15m = _cached(sym, "15", lambda s, r: _fetch(s, r, 200, 60)); frame_60m = _cached(sym, "60", lambda s, r: _fetch(s, r, 200, 99)); frame_D = _cached(sym, "D", lambda s, r: _fetch(s, r, 200, 365))
+    frame_5m = _cached(sym, "5", lambda s, r: _fetch(s, r, 300, 30)); frame_15m = _cached(sym, "15", lambda s, r: _fetch(s, r, 300, 60)); frame_60m = _cached(sym, "60", lambda s, r: _fetch(s, r, 300, 99)); frame_D = _cached(sym, "D", lambda s, r: _fetch(s, r, 600, 900))
     missing = [r for r, f in [("5m", frame_5m), ("60m", frame_60m), ("D", frame_D)] if f is None]
     if missing:
         engine.health.update("fyers_candle_api", "critical", ",".join(missing)); engine._last_decision = f"NO_SIGNAL (FRAMES_UNAVAILABLE:{','.join(missing)})"; engine._log_poll(now_ist, "SKIP"); engine._print_live_display(now_ist); return {}
