@@ -56,6 +56,7 @@ def _ensure_override_column_exists(engine: Engine) -> None:
         cols = {c["name"] for c in inspect(engine).get_columns("paper_trade")}
         missing = {"override": "BOOLEAN NOT NULL DEFAULT false", "initial_sl_price": "FLOAT", "lots": "INTEGER", "trail_active": "BOOLEAN NOT NULL DEFAULT false", "current_sl": "FLOAT", "highest_premium": "FLOAT", "account_name": "TEXT", "broker_name": "TEXT", "option_symbol": "TEXT"}
         with engine.begin() as conn:
+            conn.execute(text("SET LOCAL statement_timeout = 0"))
             for name, ddl in missing.items():
                 if name not in cols:
                     conn.execute(text(f"ALTER TABLE paper_trade ADD COLUMN {name} {ddl}"))
