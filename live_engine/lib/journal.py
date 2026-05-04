@@ -120,7 +120,6 @@ class Journal(BaseJournal):
             logger.warning("DATABASE_URL missing; Journal will use parquet backup only.")
         else:
             self._engine = get_engine()
-            ensure_table_exists(self._engine)
 
     def _load_from_parquet(self) -> pd.DataFrame:
         if not self.trades_path.exists():

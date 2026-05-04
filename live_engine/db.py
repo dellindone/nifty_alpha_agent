@@ -132,6 +132,8 @@ def get_engine() -> Engine | None:
             pool_pre_ping=True,
             pool_size=2,
             max_overflow=3,
+            connect_args={"connect_timeout": 8, "options": "-c lock_timeout=5000 -c statement_timeout=30000"},
+            pool_timeout=10,
         )
         return _engine_singleton
     except Exception as exc:
@@ -151,7 +153,7 @@ def ensure_table_exists(engine: Engine | None) -> None:
 
 def _ensure_missing_columns(engine: Engine) -> None:
     is_pg = str(engine.url).startswith("postgresql")
-    paper_missing = {
+    all_wanted = {
         "override": "BOOLEAN NOT NULL DEFAULT false",
         "initial_sl_price": "FLOAT",
         "lots": "INTEGER",
@@ -164,17 +166,22 @@ def _ensure_missing_columns(engine: Engine) -> None:
         "broker_name": "TEXT",
     }
     try:
+        existing = {col["name"] for col in inspect(engine).get_columns("paper_trade")}
+        to_add = {k: v for k, v in all_wanted.items() if k not in existing}
+        if not to_add:
+            return
         with engine.begin() as conn:
             if is_pg:
-                conn.execute(text("SET LOCAL statement_timeout = 0"))
-            for name, ddl in paper_missing.items():
+                conn.execute(text("SET LOCAL lock_timeout = '5000'"))
+                conn.execute(text("SET LOCAL statement_timeout = '30000'"))
+            for name, ddl in to_add.items():
                 if is_pg:
                     conn.execute(text(f"ALTER TABLE paper_trade ADD COLUMN IF NOT EXISTS {name} {ddl}"))
                 else:
                     try:
                         conn.execute(text(f"ALTER TABLE paper_trade ADD COLUMN {name} {ddl}"))
                     except Exception:
-                        pass  # column already exists on SQLite
+                        pass
     except Exception as exc:
         logger.warning("Failed to add missing columns on paper_trade: %s", exc)
 

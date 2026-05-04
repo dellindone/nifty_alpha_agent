@@ -3,6 +3,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytz
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 IST = pytz.timezone("Asia/Kolkata")
 

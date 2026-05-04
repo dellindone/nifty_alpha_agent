@@ -136,9 +136,11 @@ class FyersClient:
             totp_secret = os.getenv("FYERS_TOTP_SECRET")
             pin = os.getenv("FYERS_PIN")
 
+            _T = 15   # seconds per request
             res = requests.post(
                 "https://api-t2.fyers.in/vagator/v2/send_login_otp_v2",
                 json={"fy_id": self._get_encoded(fy_id), "app_id": "2"},
+                timeout=_T,
             ).json()
             if res.get("s") != "ok":
                 logger.error(f"OTP send failed: {res}")
@@ -151,6 +153,7 @@ class FyersClient:
             res = requests.post(
                 "https://api-t2.fyers.in/vagator/v2/verify_otp",
                 json={"request_key": request_key, "otp": totp},
+                timeout=_T,
             ).json()
             if res.get("s") != "ok":
                 logger.error(f"OTP verify failed: {res}")
@@ -165,6 +168,7 @@ class FyersClient:
                     "identity_type": "pin",
                     "identifier": self._get_encoded(pin),
                 },
+                timeout=_T,
             ).json()
             if res.get("s") != "ok":
                 logger.error(f"PIN verify failed: {res}")
@@ -181,6 +185,7 @@ class FyersClient:
                     "response_type": "code",
                     "create_cookie": True,
                 },
+                timeout=_T,
             ).json()
             logger.debug(f"Token URL response: {res}")
             if res.get("s") != "ok":

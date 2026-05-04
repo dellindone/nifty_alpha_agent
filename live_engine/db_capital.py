@@ -5,6 +5,7 @@ import logging
 import pandas as pd
 from sqlalchemy import Column, DateTime, Float, Integer, MetaData, Table, Text, insert, select
 from sqlalchemy.engine import Engine
+from sqlalchemy import inspect as sa_inspect
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +33,10 @@ def ensure_capital_table(engine: Engine | None, table_name: str = "capital_snaps
     if engine is None:
         return
     try:
+        if table_name in sa_inspect(engine).get_table_names():
+            return
         table = _get_table(table_name)
-        table.metadata.create_all(engine, tables=[table], checkfirst=True)
+        table.metadata.create_all(engine, tables=[table])
     except Exception as exc:
         logger.warning("Failed to ensure %s exists: %s", table_name, exc)
 

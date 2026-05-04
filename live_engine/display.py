@@ -4,6 +4,8 @@ import logging
 import sys
 from datetime import datetime, timezone
 
+from config.settings import get_instrument_config
+
 logger = logging.getLogger(__name__)
 
 
@@ -58,10 +60,17 @@ class Display:
             health_rows.append(f"  {icon} {short[:16]:<16} {status_text}  {age_text}")
         score, overall = self._e.health.score(), self._e.health.overall()
         overall_icon = "✅" if overall == "ok" else ("⚠️" if overall == "warn" else "🔴")
+        cfg = get_instrument_config(self._e.instrument)
+        day_pnl = self._e._daily_realized_pnl(now_ist.date())
+        pnl_sign = "+" if day_pnl >= 0 else ""
+        pnl_color = "\033[32m" if day_pnl >= 0 else "\033[31m"
+        pnl_reset = "\033[0m"
+        model_tag = f"{self._e.predictor.model_name}  {self._e.predictor.model_version}"
         lines = [
             sep,
             f"  {'▲' if price > 0 else '─'}  {self._e.instrument}  {price:>10,.2f}    {time_str}    polls: {self._e._poll_count}",
             f"  VIX  {self._e._last_vix:.1f}   ATR  {self._e._last_atr:.1f}    OPEN  {len(self._e.shadow_mode.open_trades())}    CAP  ₹{capital:,.0f}",
+            f"  {model_tag}    target ₹{cfg.daily_target:,}   stop ₹{cfg.daily_loss_limit:,}   day {pnl_color}{pnl_sign}₹{day_pnl:,.0f}{pnl_reset}",
             thin,
             *health_rows,
             f"  SCORE  {score}/100  {overall_icon}  {overall}",

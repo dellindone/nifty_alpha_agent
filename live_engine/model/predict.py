@@ -31,6 +31,8 @@ class ModelPrediction:
 class NiftyPredictor:
     def __init__(self) -> None:
         self.instrument: str | None = None
+        self.model_name: str = "---"
+        self.model_version: str = "---"
         self.selected_features: list[str] = []
         self.direction_model = None
         self.trade_class_model = None
@@ -73,6 +75,11 @@ class NiftyPredictor:
         selected_features_path = artifacts / f"{instrument_key}_selected_features.json"
         self.selected_features = json.loads(selected_features_path.read_text(encoding="utf-8"))
         self.instrument = instrument_key
+        version_path = artifacts / "model_version.json"
+        if version_path.exists():
+            meta = json.loads(version_path.read_text(encoding="utf-8"))
+            self.model_name = meta.get("name", "---")
+            self.model_version = meta.get("version", "---")
 
         logger.info("Loaded model artifacts for %s from %s", instrument_key, artifacts)
 

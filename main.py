@@ -8,9 +8,9 @@ Usage:
     python main.py --replay --date 2026-05-04 --speed 2
 """
 import argparse
-import fcntl
 import logging
 import os
+import signal
 import sys
 from pathlib import Path
 
@@ -62,12 +62,26 @@ def main() -> None:
 
     os.environ["AGENT_MODE"] = "LIVE" if args.live else "SHADOW"
     _setup_logging(args.verbose)
-    _pid_lock = open("/tmp/nifty_alpha_agent.lock", "w")
-    try:
-        fcntl.flock(_pid_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError:
-        print("Another nifty_alpha_agent instance is already running. Exiting.")
-        sys.exit(1)
+    _lock_path = Path("/tmp/nifty_alpha_agent.lock")
+    if _lock_path.exists():
+        try:
+            existing_pid = int(_lock_path.read_text().strip())
+            os.kill(existing_pid, 0)  # raises OSError if dead
+            # Process exists — check if it's suspended/zombie (stale) or actually running
+            import subprocess
+            state = subprocess.run(["ps", "-p", str(existing_pid), "-o", "state="],
+                                   capture_output=True, text=True).stdout.strip()
+            if state in ("T", "Z", ""):
+                os.kill(existing_pid, signal.SIGKILL)
+                print(f"Cleared suspended/zombie agent (PID {existing_pid}), taking over.")
+            else:
+                print(f"Agent already running (PID {existing_pid}, state={state}). Exiting.")
+                sys.exit(1)
+        except (OSError, ValueError):
+            pass  # process is dead — stale lock, take over
+    _lock_path.write_text(str(os.getpid()))
+    import atexit
+    atexit.register(_lock_path.unlink, missing_ok=True)
     from config.settings import Paths
     from engine import Engine
     Paths.DATA_DIRS["nifty"].mkdir(parents=True, exist_ok=True)
