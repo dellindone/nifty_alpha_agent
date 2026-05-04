@@ -249,26 +249,28 @@ class Journal(BaseJournal):
             "pnl_net": float(pnl_net),
         }
 
-        # Update parquet if the trade record exists there.
-        parquet_trades = self._load_from_parquet()
-        if not parquet_trades.empty:
-            p_mask = parquet_trades["trade_id"].astype(str) == str(trade_id)
-            if p_mask.any():
-                for col, val in exit_updates.items():
-                    if col in ("timestamp_entry", "timestamp_exit") and val is not None:
-                        ts = pd.Timestamp(val)
-                        val = ts.tz_convert("UTC") if ts.tzinfo is not None else ts.tz_localize("UTC")
-                    parquet_trades.loc[p_mask, col] = val
-                self._persist(parquet_trades)
-
-        # Always update DB (primary source).
-        updated_row = dict(row) | exit_updates
-        if _IS_LIVE:
-            updated_row.setdefault("trade_state", "CLOSED")
-        _upsert_fn(self._engine, updated_row)
+        if self._engine is None:
+            # Parquet-only mode — write exit to parquet.
+            parquet_trades = self._load_from_parquet()
+            if not parquet_trades.empty:
+                p_mask = parquet_trades["trade_id"].astype(str) == str(trade_id)
+                if p_mask.any():
+                    for col, val in exit_updates.items():
+                        if col in ("timestamp_entry", "timestamp_exit") and val is not None:
+                            ts = pd.Timestamp(val)
+                            ts = ts.tz_convert("UTC") if ts.tzinfo is not None else ts.tz_localize("UTC")
+                            val = ts.floor("ms")
+                        parquet_trades.loc[p_mask, col] = val
+                    self._persist(parquet_trades)
+        else:
+            # DB is primary source — upsert directly, no parquet write.
+            updated_row = dict(row) | exit_updates
+            if _IS_LIVE:
+                updated_row.setdefault("trade_state", "CLOSED")
+            _upsert_fn(self._engine, updated_row)
 
     def update_trade(self, trade_id: str, updates: dict) -> None:
-        all_trades = self._load_from_parquet()
+        all_trades = self.load_all()
         if all_trades.empty:
             return
         mask = all_trades["trade_id"].astype(str) == str(trade_id)
@@ -277,17 +279,19 @@ class Journal(BaseJournal):
         for key, value in updates.items():
             if key in all_trades.columns:
                 all_trades.loc[mask, key] = value
-        self._persist(all_trades)
         updated_row = (
             all_trades.loc[mask]
             .sort_values("timestamp_entry")
             .iloc[-1]
             .to_dict()
         )
-        _upsert_fn(self._engine, updated_row)
+        if self._engine is not None:
+            _upsert_fn(self._engine, updated_row)
+        else:
+            self._persist(all_trades)
 
     def update_trade_state(self, trade_id: str, *, current_sl: float, highest_premium: float, trail_active: bool = False, lots: int | None = None) -> None:
-        all_trades = self._load_from_parquet()
+        all_trades = self.load_all()
         if all_trades.empty:
             return
         mask = all_trades["trade_id"].astype(str) == str(trade_id)
@@ -298,14 +302,16 @@ class Journal(BaseJournal):
         all_trades.loc[mask, "trail_active"] = bool(trail_active)
         if lots is not None:
             all_trades.loc[mask, "lots"] = int(lots)
-        self._persist(all_trades)
         updated_row = (
             all_trades.loc[mask]
             .sort_values("timestamp_entry")
             .iloc[-1]
             .to_dict()
         )
-        _upsert_fn(self._engine, updated_row)
+        if self._engine is not None:
+            _upsert_fn(self._engine, updated_row)
+        else:
+            self._persist(all_trades)
 
     def open_trades(self) -> pd.DataFrame:
         return self.load_open_trades()
