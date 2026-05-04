@@ -48,6 +48,7 @@ class TradeRecord:
     vix_at_entry: float
     atr_at_entry: float
     model_version: str
+    option_symbol: str = ""
 
 
 TRADE_COLUMNS = [
@@ -79,6 +80,7 @@ TRADE_COLUMNS = [
     "vix_at_entry",
     "atr_at_entry",
     "model_version",
+    "option_symbol",
 ]
 
 
