@@ -54,6 +54,7 @@ class InstrumentConfig:
     atr_mult_scale: float = 1.0
     trail_width_mult: float = 1.0
     trail_activation_rr: float = 1.0
+    min_session_bar: int = 6  # block signals before this bar (bar 6 = 09:45 close, lets OR settle)
 
 
 INSTRUMENT_CONFIGS: dict[str, InstrumentConfig] = {

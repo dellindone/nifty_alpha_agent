@@ -81,6 +81,10 @@ class SignalHandler:
         if not prediction.should_trade or prediction.trade_class == "NO_TRADE":
             _block("MODEL_NO_TRADE")
             return None
+        session_bar = int(row.get("session_bar", 999))
+        if session_bar < cfg.min_session_bar:
+            _block(f"TOO_EARLY bar={session_bar} min={cfg.min_session_bar}")
+            return None
         if float(prediction.confidence) < cfg.min_confidence:
             _block(f"LOW_CONF {float(prediction.confidence):.0%} < {cfg.min_confidence:.0%}")
             return None

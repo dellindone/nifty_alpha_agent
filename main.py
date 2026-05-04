@@ -6,6 +6,7 @@ Usage:
     python main.py --shadow --dry-run
 """
 import argparse
+import fcntl
 import logging
 import os
 import sys
@@ -37,6 +38,12 @@ def main() -> None:
     args = parser.parse_args()
     os.environ["AGENT_MODE"] = "LIVE" if args.live else "SHADOW"
     _setup_logging(args.verbose)
+    _pid_lock = open("/tmp/nifty_alpha_agent.lock", "w")
+    try:
+        fcntl.flock(_pid_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        print("Another nifty_alpha_agent instance is already running. Exiting.")
+        sys.exit(1)
     from config.settings import Paths
     from engine import Engine
     Paths.DATA_DIRS["nifty"].mkdir(parents=True, exist_ok=True)

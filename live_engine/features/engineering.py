@@ -4,6 +4,7 @@ import pandas as pd
 
 from ingestion.multi_tf_builder import multi_tf_builder
 from ingestion.option_premium_history import build_premium_history
+from utils.market_calendar import market_calendar
 from features.candlestick import compute_candlestick_features
 from features.institutional_context import compute_institutional_context
 from features.option_features import compute_option_features
@@ -137,9 +138,11 @@ class FeatureEngineer:
         if "vix" in featured.columns:
             featured = compute_vix_features(featured)
             if "ce_premium" not in featured.columns or "pe_premium" not in featured.columns:
+                last_date = featured.index[-1].date() if not featured.empty else None
+                actual_dte = max(1, market_calendar.days_to_next_expiry(instrument, last_date)) if last_date else days_to_expiry
                 premium_history = build_premium_history(
                     featured[["close", "vix"]],
-                    days_to_expiry=days_to_expiry,
+                    days_to_expiry=actual_dte,
                     risk_free_rate=risk_free_rate,
                 )
                 featured = featured.join(premium_history)

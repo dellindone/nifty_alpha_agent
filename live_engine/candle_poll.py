@@ -77,7 +77,7 @@ class CandlePoll:
                 self._e._log_poll(now_ist, "NO_FEATURE_ROW")
                 self._e._print_live_display(now_ist)
                 return
-            feature_row, row = feature_frame.iloc[[-1]].copy(), feature_frame.iloc[[-1]].copy().iloc[-1]
+            feature_row, row = feature_frame.iloc[[-2]].copy(), feature_frame.iloc[[-2]].copy().iloc[-1]
             model_input = feature_row.reindex(columns=self._e.predictor.selected_features)
             nan_cols = [c for c in model_input.columns if model_input[c].isna().all()]
             self._e.health.update("feature_pipeline", "warn" if nan_cols else "ok", f"NaN in: {','.join(nan_cols)}" if nan_cols else "")
