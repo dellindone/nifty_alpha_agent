@@ -59,21 +59,40 @@ class CandlePoll:
                 self._e._poll_count += 1
                 for symbol in self._e.shadow_mode.cancel_expired_pending(now_ist.astimezone(timezone.utc)):
                     self._e._unsubscribe_if_unused(symbol)
-            frames = self._fetch_live_frames(now_ist)
+            try:
+                frames = self._fetch_live_frames(now_ist)
+                self._e.health.update("fyers_candle_api", "ok", "")
+            except Exception as exc:
+                self._e.health.update("fyers_candle_api", "critical", str(exc))
+                return
             if not frames:
                 return
-            feature_frame = build_feature_frame(frames, instrument=self._e.instrument)
+            try:
+                feature_frame = build_feature_frame(frames, instrument=self._e.instrument)
+            except Exception as exc:
+                self._e.health.update("feature_pipeline", "critical", str(exc))
+                raise
             if feature_frame.empty:
                 self._e._last_decision = "NO_FEATURE_ROW"
                 self._e._log_poll(now_ist, "NO_FEATURE_ROW")
                 self._e._print_live_display(now_ist)
                 return
             feature_row, row = feature_frame.iloc[[-1]].copy(), feature_frame.iloc[[-1]].copy().iloc[-1]
+            model_input = feature_row.reindex(columns=self._e.predictor.selected_features)
+            nan_cols = [c for c in model_input.columns if model_input[c].isna().all()]
+            self._e.health.update("feature_pipeline", "warn" if nan_cols else "ok", f"NaN in: {','.join(nan_cols)}" if nan_cols else "")
             self._e._last_vix, self._e._last_atr = float(row.get("vix", 0.0)), float(row.get("atr_14", 0.0))
+            vix = float(row.get("vix", 0.0))
+            self._e.health.update("fyers_vix", "warn" if vix <= 0.0 else "ok", "vix returned 0" if vix <= 0.0 else "")
             close = float(row.get("close", 0.0))
             if close > 0:
                 self._e._last_index_price = close
-            prediction = self._e.predictor.predict(feature_row)
+            try:
+                prediction = self._e.predictor.predict(feature_row)
+                self._e.health.update("model_predict", "ok", "")
+            except Exception as exc:
+                self._e.health.update("model_predict", "critical", str(exc))
+                raise
             self._e._last_pred_data = {"direction": "CE" if prediction.direction == 1 else "PE", "confidence": float(prediction.confidence), "sl_bin": str(prediction.sl_bin), "trail_bin": str(prediction.trail_bin), "trail_tf": str(prediction.trail_tf), "sl_price": 0.0, "target_price": float(prediction.phase1_target)}
             today_ist = datetime.now(IST).date()
             self._e._last_daily_pnl, self._e._last_daily_count = self._daily_realized_pnl(today_ist), self._daily_trade_count_today(today_ist)
@@ -122,6 +141,7 @@ class CandlePoll:
         # Any required frame still cold after a failed fetch — skip poll gracefully.
         missing = [r for r, f in [("5m", frame_5m), ("60m", frame_60m), ("D", frame_D)] if f is None]
         if missing:
+            self._e.health.update("fyers_candle_api", "critical", ",".join(missing))
             logger.warning("Frames unavailable (rate-limited) %s for %s, skipping poll", missing, self._e.instrument)
             self._e._last_decision = f"NO_SIGNAL (FRAMES_UNAVAILABLE:{','.join(missing)})"
             self._e._log_poll(now_ist, "SKIP")
@@ -130,6 +150,7 @@ class CandlePoll:
 
         vix_5m = _get_cached_frame("NSE:INDIAVIX-INDEX", "VIX", lambda s, r: _fetch("NSE:INDIAVIX-INDEX", "5", bars=400, days_back=30))
         if vix_5m is None:
+            self._e.health.update("fyers_vix", "warn", "unavailable")
             logger.warning("VIX unavailable (rate-limited), skipping poll for %s", self._e.instrument)
             self._e._last_decision = "NO_SIGNAL (VIX_UNAVAILABLE)"
             self._e._log_poll(now_ist, "SKIP")
