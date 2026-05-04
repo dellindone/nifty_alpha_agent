@@ -41,6 +41,7 @@ class _OpenTrade:
     trade_id: str
     direction: int       # 1=CE 0=PE
     entry_close: float
+    entry_premium: float
     sl_dist: float
     target_dist: float
     entry_bar: int
@@ -205,14 +206,16 @@ class ReplayRunner:
 
             if reason:
                 pnl = (move - 0.05) * lot_size * t.lots
+                exit_premium = t.entry_premium + move
                 icon = "✅" if pnl >= 0 else "🔴"
                 direction_label = "CE" if t.direction == 1 else "PE"
                 trail_info = f"  trail_peak={t.trail_peak:+.1f}" if t.trail_active else ""
                 logger.info("REPLAY_EXIT trade_id=%s reason=%s move=%.1f pnl=₹%.0f bars=%d", t.trade_id, reason, move, pnl, t.bars_held)
-                print(f"  [{now_ist.strftime('%H:%M')}] EXIT {reason}  move={move:+.1f}{trail_info}  pnl=₹{pnl:,.0f}  bars={t.bars_held}")
+                print(f"  [{now_ist.strftime('%H:%M')}] EXIT {reason}  move={move:+.1f}{trail_info}  entry=₹{t.entry_premium:.2f}  exit=₹{exit_premium:.2f}  pnl=₹{pnl:,.0f}  bars={t.bars_held}")
                 self.reporter._send(
                     f"[REPLAY {self.replay_date} {now_ist.strftime('%H:%M')} IST]\n"
                     f"{icon} EXIT {reason} — {self.instrument} {direction_label}\n"
+                    f"Entry: ₹{t.entry_premium:.2f}  →  Exit: ₹{exit_premium:.2f}\n"
                     f"Move: {move:+.1f} pts | Trail peak: {t.trail_peak:+.1f} pts | Bars: {t.bars_held}\n"
                     f"PnL: ₹{pnl:,.0f}"
                 )
@@ -259,6 +262,7 @@ class ReplayRunner:
                     trade_id=f"REPLAY_{self._trade_seq:03d}",
                     direction=signal.direction,
                     entry_close=close,
+                    entry_premium=signal.entry_premium,
                     sl_dist=signal.sl_price,
                     target_dist=signal.target_price,
                     entry_bar=bar_idx,
