@@ -142,6 +142,7 @@ class ReplayRunner:
                 instrument=self.instrument,
                 daily_pnl=daily_pnl,
                 daily_trade_count=daily_count,
+                open_trade_count=len(self._open_trades),
             )
 
             conf = f"{prediction.confidence:.0%}"

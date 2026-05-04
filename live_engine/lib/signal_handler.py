@@ -66,6 +66,7 @@ class SignalHandler:
         instrument: str,
         daily_pnl: float = 0.0,
         daily_trade_count: int = 0,
+        open_trade_count: int = 0,
     ) -> TradeSignal | None:
         instrument_key = instrument.upper()
         cfg = get_instrument_config(instrument_key)
@@ -80,6 +81,9 @@ class SignalHandler:
 
         if not prediction.should_trade or prediction.trade_class == "NO_TRADE":
             _block("MODEL_NO_TRADE")
+            return None
+        if int(open_trade_count) > 0:
+            _block(f"TRADE_ALREADY_OPEN ({open_trade_count} open)")
             return None
         session_bar = int(row.get("session_bar", 999))
         if session_bar < cfg.min_session_bar:

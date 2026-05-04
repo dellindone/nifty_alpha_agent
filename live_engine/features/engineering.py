@@ -59,6 +59,9 @@ def _filter_date_range(
         filtered = filtered.loc[filtered.index >= start_ts]
     if end_date is not None:
         end_ts = pd.Timestamp(end_date)
+        # Date-only input (no time) — extend to end of day so IST bars aren't cut by UTC midnight
+        if end_ts.hour == 0 and end_ts.minute == 0 and end_ts.second == 0:
+            end_ts = end_ts + pd.Timedelta(hours=23, minutes=59, seconds=59)
         if end_ts.tzinfo is None:
             end_ts = end_ts.tz_localize("UTC")
         else:
