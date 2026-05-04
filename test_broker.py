@@ -10,6 +10,7 @@ load_dotenv(Path(__file__).parent / ".env")
 sys.path.insert(0, str(Path(__file__).parent / "live_engine"))
 
 from config.settings import Trading
+from config.instruments import LOT_SIZES
 from brokers.factory import BrokerFactory
 from brokers.base import OrderType, Product, Segment, TransactionType
 from ingestion.option_chain import option_chain_service
@@ -39,11 +40,12 @@ if not instrument_name:
     print("ERROR: no instrument symbol in selected strike")
     sys.exit(1)
 
+lot_size = LOT_SIZES.get("NIFTY", 75)
 broker = BrokerFactory.create(Trading.BROKER_NAME)
-print("Placing 1 qty MARKET BUY order ...")
+print(f"Placing 1 lot ({lot_size} qty) MARKET BUY order ...")
 result = broker.place_order(
     symbol=raw_symbol,
-    qty=1,
+    qty=lot_size,
     transaction_type=TransactionType.BUY,
     order_type=OrderType.MARKET,
     segment=Segment.FNO,
