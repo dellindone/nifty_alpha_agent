@@ -39,13 +39,16 @@ _STRIKE_STEP = {"NIFTY": 50, "BANKNIFTY": 100, "SENSEX": 100}
 @dataclass
 class _OpenTrade:
     trade_id: str
-    direction: int
+    direction: int       # 1=CE 0=PE
     entry_close: float
     sl_dist: float
     target_dist: float
     entry_bar: int
     lots: int
     bars_held: int = 0
+    trail_active: bool = False
+    trail_peak: float = 0.0   # highest favorable price seen once trail is on
+    trail_stop: float = 0.0   # current trail SL level (in move pts from entry)
 
 
 class ReplayRunner:
@@ -164,27 +167,53 @@ class ReplayRunner:
         return signal, ""
 
     def _check_open_trades(self, close: float, now_ist: datetime) -> None:
+        cfg = get_instrument_config(self.instrument)
+        thresh = cfg.trail_activation_rr  # multiplier on sl_dist for trail activation
+        width_mult = cfg.trail_width_mult  # trail stop = peak - width_mult * sl_dist
+        lot_size = LOT_SIZES.get(self.instrument, 50)
         still_open = []
+
         for t in self._open_trades:
             t.bars_held += 1
             move = (close - t.entry_close) if t.direction == 1 else (t.entry_close - close)
             reason = None
-            if move <= -t.sl_dist:
+
+            # Trail activation: when move reaches trail_activation_rr × sl_dist
+            if not t.trail_active and move >= thresh * t.sl_dist:
+                t.trail_active = True
+                t.trail_peak = move
+                t.trail_stop = t.trail_peak - width_mult * t.sl_dist
+
+            # Update trail peak and stop
+            if t.trail_active:
+                if move > t.trail_peak:
+                    t.trail_peak = move
+                    t.trail_stop = t.trail_peak - width_mult * t.sl_dist
+                if move <= t.trail_stop:
+                    reason = "TRAIL_STOP"
+
+            # Hard SL (only before trail activates)
+            if not t.trail_active and move <= -t.sl_dist:
                 reason = "SL_HIT"
-            elif move >= t.target_dist:
+
+            # Hard target exit
+            if move >= t.target_dist:
                 reason = "TARGET_HIT"
-            elif t.bars_held >= 78:
+
+            if t.bars_held >= 78:
                 reason = "EOD_EXIT"
+
             if reason:
-                pnl = (move - 0.05) * LOT_SIZES.get(self.instrument, 50) * t.lots
+                pnl = (move - 0.05) * lot_size * t.lots
                 icon = "✅" if pnl >= 0 else "🔴"
                 direction_label = "CE" if t.direction == 1 else "PE"
-                logger.info("REPLAY_EXIT trade_id=%s reason=%s pnl=₹%.0f bars=%d", t.trade_id, reason, pnl, t.bars_held)
-                print(f"  [{now_ist.strftime('%H:%M')}] EXIT {reason}  move={move:+.1f}  pnl=₹{pnl:,.0f}  bars={t.bars_held}")
+                trail_info = f"  trail_peak={t.trail_peak:+.1f}" if t.trail_active else ""
+                logger.info("REPLAY_EXIT trade_id=%s reason=%s move=%.1f pnl=₹%.0f bars=%d", t.trade_id, reason, move, pnl, t.bars_held)
+                print(f"  [{now_ist.strftime('%H:%M')}] EXIT {reason}  move={move:+.1f}{trail_info}  pnl=₹{pnl:,.0f}  bars={t.bars_held}")
                 self.reporter._send(
                     f"[REPLAY {self.replay_date} {now_ist.strftime('%H:%M')} IST]\n"
                     f"{icon} EXIT {reason} — {self.instrument} {direction_label}\n"
-                    f"Move: {move:+.1f} pts | Bars held: {t.bars_held}\n"
+                    f"Move: {move:+.1f} pts | Trail peak: {t.trail_peak:+.1f} pts | Bars: {t.bars_held}\n"
                     f"PnL: ₹{pnl:,.0f}"
                 )
             else:
