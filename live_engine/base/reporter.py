@@ -41,10 +41,11 @@ class BaseReporter(ABC):
 
     def send_engine_start_alert(self, instrument: str, started_at: datetime) -> None:
         local = started_at.astimezone(IST) if started_at.tzinfo else IST.localize(started_at)
+        mode_label = "Paper/Shadow" if self.mode == "SHADOW" else "Live Trading"
         self._send(
-            f"🟢 {instrument} SHADOW AGENT LIVE\n"
+            f"🟢 {instrument} AGENT STARTED\n"
             f"Started: {local.strftime('%d-%b-%Y %H:%M:%S IST')}\n"
-            "Mode: Paper/Shadow only\n"
+            f"Mode: {mode_label}\n"
             "Status: Heartbeat enabled (hourly)"
         )
 
@@ -53,15 +54,15 @@ class BaseReporter(ABC):
         *,
         instrument: str,
         open_trades: int,
-        total_signals_today: int,
+        trades_today: int,
         capital: float,
         uptime_minutes: int,
         index_price: float = 0.0,
     ) -> None:
         price_str = f"${index_price:,.0f}" if "BTC" in instrument.upper() else f"₹{index_price:,.0f}"
         self._send(
-            f"💓 {instrument} SHADOW HEARTBEAT\n"
-            f"{instrument}: {price_str} | Open: {open_trades} | Signals: {total_signals_today}\n"
+            f"💓 {instrument} HEARTBEAT\n"
+            f"{instrument}: {price_str} | Open: {open_trades} | Trades today: {trades_today}\n"
             f"Capital: ₹{capital:,.0f} | Uptime: {uptime_minutes}min\n"
             "Proof: Agent loop active and polling market data."
         )

@@ -4,6 +4,7 @@ from datetime import datetime
 
 import pandas as pd
 
+from config.settings import get_instrument_config
 from lib.signal_handler import TradeSignal
 from ingestion.option_chain import option_chain_service
 
@@ -37,7 +38,7 @@ class SignalRouter:
     def _build_no_signal_decision(self, prediction) -> str:
         if self._e._last_vix > 30.0:
             return f"BLOCKED_VIX_{self._e._last_vix:.1f}"
-        if float(prediction.confidence) < self._e.signal_handler.MIN_CONFIDENCE:
+        if float(prediction.confidence) < get_instrument_config(self._e.instrument).min_confidence:
             return f"LOW_CONF_{float(prediction.confidence):.2f}"
         return "NO_SIGNAL"
 
@@ -51,6 +52,7 @@ class SignalRouter:
             return None
         csv_df = option_chain_service._fetch_csv(instrument)
         if csv_df is None or csv_df.empty:
+            self._e.health.update("fyers_option_chain", "warn", "option chain CSV empty")
             return None
         try:
             strike_mask = pd.to_numeric(csv_df[15], errors="coerce") == float(strike)
@@ -72,8 +74,10 @@ class SignalRouter:
         except Exception:
             return None
         if matched.empty:
+            self._e.health.update("fyers_option_chain", "warn", "no matching symbol")
             return None
         symbol = str(matched.iloc[0][9])
+        self._e.health.update("fyers_option_chain", "ok", "")
         return symbol if symbol else None
 
     def _resolve_option_symbol_from_signal(self, signal: TradeSignal) -> str | None:
@@ -82,6 +86,7 @@ class SignalRouter:
             return None
         csv_df = option_chain_service._fetch_csv(instrument)
         if csv_df is None or csv_df.empty:
+            self._e.health.update("fyers_option_chain", "warn", "option chain CSV empty")
             return None
         try:
             strike_mask = pd.to_numeric(csv_df[15], errors="coerce") == float(strike)
@@ -103,6 +108,8 @@ class SignalRouter:
         except Exception:
             return None
         if matched.empty:
+            self._e.health.update("fyers_option_chain", "warn", "no matching symbol")
             return None
         symbol = str(matched.iloc[0][9])
+        self._e.health.update("fyers_option_chain", "ok", "")
         return symbol if symbol else None

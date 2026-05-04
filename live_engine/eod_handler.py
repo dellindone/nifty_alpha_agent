@@ -60,13 +60,13 @@ class EODHandler:
                 index_price = float(quote[0]["v"]["lp"])
         except Exception:
             pass
-        total_signals_today = 0
+        trades_today = 0
         all_trades = self._e.journal.load_all()
         if not all_trades.empty and "timestamp_entry" in all_trades.columns:
             timestamps = pd.to_datetime(all_trades["timestamp_entry"], errors="coerce", utc=True)
-            total_signals_today = int((timestamps.dt.tz_convert(IST).dt.date == now_ist.date()).sum())
+            trades_today = int((timestamps.dt.tz_convert(IST).dt.date == now_ist.date()).sum())
         started = self._e._started_at_ist or now_ist
-        self._e.reporter.send_hourly_live_summary(instrument=self._e.instrument, open_trades=len(self._e.journal.load_open_trades()), total_signals_today=total_signals_today, capital=float(self._e.capital_tracker.current_capital), uptime_minutes=max(0, int((now_ist - started).total_seconds() // 60)), index_price=index_price)
+        self._e.reporter.send_hourly_live_summary(instrument=self._e.instrument, open_trades=len(self._e.journal.load_open_trades()), trades_today=trades_today, capital=float(self._e.capital_tracker.current_capital), uptime_minutes=max(0, int((now_ist - started).total_seconds() // 60)), index_price=index_price)
         self._e._last_hourly_heartbeat_key = key
 
     def _current_premiums_for_open_trades(self) -> dict[str, float]:
