@@ -24,7 +24,7 @@ class Display:
             entry, sl, tp, lot_size, lots = snap["entry_premium"], snap["current_sl"], snap["current_target"], snap["lot_size"], snap["lots"]
             conf, age_s = int(round(snap["confidence"] * 100)), (datetime.now(timezone.utc) - snap["entry_time"]).total_seconds()
             age_str, opt_sym = f"{int(age_s // 60)}m{int(age_s % 60):02d}s", snap.get("option_symbol", "")
-            current_prem = self._e._last_current_premiums[opt_sym] if opt_sym and opt_sym in self._e._last_current_premiums else self._e._last_current_premiums.get(self._e.instrument, entry)
+            current_prem = self._e._last_current_premiums.get(opt_sym, entry) if opt_sym else entry
             pnl_gross = (current_prem - entry) * lot_size * lots
             pnl_pct = (current_prem - entry) / entry * 100 if entry > 0 else 0.0
             pnl_sign = "+" if pnl_gross >= 0 else ""
