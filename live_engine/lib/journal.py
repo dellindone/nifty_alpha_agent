@@ -166,15 +166,19 @@ class Journal(BaseJournal):
             return None
 
     def load_all(self) -> pd.DataFrame:
-        db_df = self._load_all_from_db()
-        if db_df is not None:
-            return db_df
+        if self._engine is not None:
+            db_df = self._load_all_from_db()
+            if db_df is not None:
+                return db_df
+            return pd.DataFrame(columns=TRADE_COLUMNS)
         return self._load_from_parquet()
 
     def load_open_trades(self) -> pd.DataFrame:
-        db_df = self._load_open_from_db()
-        if db_df is not None:
-            return db_df
+        if self._engine is not None:
+            db_df = self._load_open_from_db()
+            if db_df is not None:
+                return db_df
+            return pd.DataFrame(columns=TRADE_COLUMNS)
         all_trades = self._load_from_parquet()
         if all_trades.empty:
             return all_trades
