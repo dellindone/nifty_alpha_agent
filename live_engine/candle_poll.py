@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
 
 import pandas as pd
@@ -56,12 +57,18 @@ class CandlePoll:
             elif trade_signal is not None: signal_label = self._e._handle_trade_signal(trade_signal, prediction)
             else:
                 signal_label = "NONE"; reason = self._e.signal_handler.last_block_reason or self._e._build_no_signal_decision(prediction); self._e._last_decision = f"NO_SIGNAL ({reason})"
-            self._e._log_poll(now_ist, signal_label, len(self._e.journal.open_trades())); self._e._print_live_display(now_ist)
+            self._e._log_poll(now_ist, signal_label, len(self._e.shadow_mode.open_trades())); self._e._print_live_display(now_ist)
         except Exception as exc:
             logger.exception("poll_failed timestamp=%s error=%s", now_ist.isoformat(), exc)
 
+    def _load_trades_df(self) -> pd.DataFrame:
+        if os.getenv("AGENT_MODE") == "LIVE":
+            from db import get_engine, load_live_trades
+            return load_live_trades(get_engine())
+        return self._e.journal.load_all()
+
     def _daily_realized_pnl(self, today) -> float:
-        df = self._e.journal.load_all()
+        df = self._load_trades_df()
         if df.empty: return 0.0
         exits = df.dropna(subset=["timestamp_exit"])
         if exits.empty: return 0.0
@@ -69,7 +76,7 @@ class CandlePoll:
         return float(pd.to_numeric(today_closed["pnl_net"], errors="coerce").fillna(0.0).sum())
 
     def _daily_trade_count_today(self, today) -> int:
-        df = self._e.journal.load_all()
+        df = self._load_trades_df()
         if df.empty: return 0
         entry_ts = pd.to_datetime(df["timestamp_entry"], errors="coerce", utc=True)
         return int((entry_ts.dt.tz_convert(IST).dt.date == today).sum())

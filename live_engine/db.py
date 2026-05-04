@@ -4,7 +4,8 @@ import logging
 import os
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Float, Integer, MetaData, Table, Text, create_engine, inspect, text
+import pandas as pd
+from sqlalchemy import Boolean, Column, Date, DateTime, Float, Integer, MetaData, Table, Text, create_engine, inspect, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.engine import Engine
@@ -103,6 +104,18 @@ def upsert_trade(engine: Engine | None, record: dict) -> None:
 
 def upsert_live_trade(engine: Engine | None, record: dict) -> None:
     _upsert(engine, live_trade, record)
+
+
+def load_live_trades(engine: Engine | None) -> pd.DataFrame:
+    if engine is None:
+        return pd.DataFrame()
+    try:
+        with engine.connect() as conn:
+            df = pd.read_sql(select(live_trade).order_by(live_trade.c.timestamp_entry), conn)
+        return df
+    except Exception as exc:
+        logger.warning("load_live_trades failed: %s", exc)
+        return pd.DataFrame()
 
 
 def check_db_health(engine) -> tuple[str, str]:
