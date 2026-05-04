@@ -1,13 +1,34 @@
 {
-  "version": "v4_oos_2025",
-  "promoted_at": "2026-05-04",
-  "trained_on": "2022-01-03 -> 2025-12-31",
+  "version": "v7_sl_rework",
+  "name": "ARJUN",
+  "promoted_at": null,
+  "trained_on": "2022-01-03 -> 2026-05-04",
   "label_mode": "barrier",
   "label_min_rr": 2.0,
-  "wf_mean_accuracy": 0.5116,
-  "wf_mean_f1": 0.5098,
-  "direction_accuracy": 0.5443,
-  "status": "live",
-  "promoted_from": "trading_research/nifty/experiments/v4_oos_2025",
-  "note": "OOS-validated on 2025 data. Used in live trading."
+  "n_features": 90,
+  "wf_mean_accuracy": 0.5293,
+  "wf_mean_f1": 0.5195,
+  "direction_accuracy": 0.5663,
+  "phase1_target_mae": 1.98,
+  "status": null,
+  "promoted_from": "trading_research/nifty/experiments/v7_sl_rework",
+  "changes_from_v6": "5-class sl_bin (added NARROW bin), aligns sl buckets to live ATR_MULTIPLIERS, reduces VERY_WIDE from 40.7% to 4.8%",
+  "sim_oos_2021": {
+    "win_rate_pct": 81.6,
+    "avg_day_pnl": 4302,
+    "max_dd": 5099,
+    "trading_days": 247
+  },
+  "sim_oos_2020": {
+    "win_rate_pct": 80.5,
+    "avg_day_pnl": 3926,
+    "max_dd": 9187,
+    "trading_days": 240
+  },
+  "sim_oos_2019": {
+    "win_rate_pct": 82.9,
+    "avg_day_pnl": 3322,
+    "max_dd": 4305,
+    "trading_days": 234
+  }
 }

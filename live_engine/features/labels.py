@@ -12,6 +12,15 @@ def _bucket_ratio(value: pd.Series) -> pd.Series:
     return pd.cut(value, bins=bins, labels=labels).astype("string")
 
 
+def _bucket_sl_ratio(value: pd.Series) -> pd.Series:
+    # 5-class sl_bin aligned to live ATR_MULTIPLIERS (TIGHT=0.75, NARROW=1.0,
+    # MEDIUM=1.5, WIDE=2.0, VERY_WIDE=2.5). Each bin means "adverse excursion
+    # needed at least this SL multiplier to survive."
+    bins   = [-np.inf, 0.75, 1.0, 1.5, 2.0, np.inf]
+    labels = ["TIGHT", "NARROW", "MEDIUM", "WIDE", "VERY_WIDE"]
+    return pd.cut(value, bins=bins, labels=labels).astype("string")
+
+
 def _phase1_multiplier(favorable_ratio: pd.Series) -> pd.Series:
     conditions = [
         favorable_ratio <= 0.75,
@@ -81,7 +90,7 @@ def build_labels(feature_df: pd.DataFrame, horizon: int = 3) -> pd.DataFrame:
     labels["direction"] = direction
     labels["adverse_excursion"] = pd.Series(adverse_excursion, index=feature_df.index)
     labels["favorable_excursion"] = pd.Series(favorable_excursion, index=feature_df.index)
-    labels["sl_bin"] = _bucket_ratio(adverse_ratio)
+    labels["sl_bin"] = _bucket_sl_ratio(adverse_ratio)
     labels["trail_bin"] = _bucket_ratio(favorable_ratio)
     labels["phase1_target"] = phase1_multiplier * feature_df["atr_14"]
     labels["trail_tf"] = _select_trail_tf(favorable_ratio)
@@ -208,7 +217,7 @@ def build_barrier_labels(
     labels["direction"] = direction
     labels["adverse_excursion"] = adverse_excursion
     labels["favorable_excursion"] = favorable_excursion
-    labels["sl_bin"] = _bucket_ratio(adverse_ratio)
+    labels["sl_bin"] = _bucket_sl_ratio(adverse_ratio)
     labels["trail_bin"] = _bucket_ratio(favorable_ratio)
     action_mask = direction.notna()
     labels["phase1_target"] = (phase1_multiplier * feature_df["atr_14"]).where(action_mask)
