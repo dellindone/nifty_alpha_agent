@@ -40,9 +40,11 @@ if not instrument_name:
     print("ERROR: no instrument symbol in selected strike")
     sys.exit(1)
 
-lot_size = LOT_SIZES.get("NIFTY", 75)
+lot_size = selected.get("lot_size") or LOT_SIZES.get("NIFTY", 65)
 broker = BrokerFactory.create(Trading.BROKER_NAME)
-print(f"Placing 1 lot ({lot_size} qty) MARKET BUY order ...")
+groww_symbol = raw_symbol.split(":")[-1]
+exchange = "BSE" if raw_symbol.upper().startswith("BSE:") else "NSE"
+print(f"Sending → trading_symbol={groww_symbol}  exchange={exchange}  qty={lot_size}  segment=FNO  product=NRML  order_type=MARKET")
 result = broker.place_order(
     symbol=raw_symbol,
     qty=lot_size,
