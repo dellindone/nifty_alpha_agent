@@ -24,7 +24,8 @@ from model.predict import NiftyPredictor, ModelPrediction
 from risk.capital_tracker import CapitalTracker
 from risk.position_sizer import stop_loss_from_bin
 from config.instruments import LOT_SIZES
-from utils.market_calendar import next_expiry
+from utils.market_calendar import next_expiry, market_calendar
+from ingestion.synthetic_premium import synthetic_premium
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,7 @@ class ReplayRunner:
             os.getenv("TELEGRAM_BOT_TOKEN", ""),
             os.getenv("TELEGRAM_CHAT_ID", ""),
         )
+        self.reporter.mode = "REPLAY"
         self._open_trades: list[_OpenTrade] = []
         self._trade_seq = 0
 
@@ -122,18 +124,22 @@ class ReplayRunner:
             return None, f"LOW_RR {rr:.2f} < {cfg.min_rr} (sl={sl:.2f} tp={tp:.2f})"
 
         option_type = "CE" if prediction.direction == 1 else "PE"
-        premium_col = "ce_premium" if option_type == "CE" else "pe_premium"
-        entry_premium = float(row.get(premium_col, 0.0))
-
         close = float(row.get("close", 0.0))
         step = _STRIKE_STEP.get(self.instrument, 50)
         atm = int(round(close / step) * step)
-        # Mirror live strike_selector NORMAL mode: prefer 2 ITM
-        # CE (bullish): 2 strikes below ATM; PE (bearish): 2 strikes above ATM
-        if option_type == "CE":
-            strike = atm - 2 * step
-        else:
-            strike = atm + 2 * step
+        # Mirror live strike_selector NORMAL mode: 2 ITM
+        strike = (atm - 2 * step) if option_type == "CE" else (atm + 2 * step)
+
+        # Price the actual 2 ITM strike via Black-Scholes (not ATM parquet column)
+        dte = max(1, market_calendar.days_to_next_expiry(self.instrument, now_ist.date()))
+        entry_premium = synthetic_premium.compute(
+            spot=close,
+            strike=strike,
+            days_to_expiry=dte,
+            volatility_pct=vix if vix > 0 else 15.0,
+            risk_free_rate=6.5,
+            option_type=option_type,
+        ) or float(row.get("ce_premium" if option_type == "CE" else "pe_premium", 0.0))
         lot_size = LOT_SIZES.get(self.instrument, 50)
         expiry = next_expiry(self.instrument, now_ist.date())
 
