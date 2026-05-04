@@ -1,15 +1,23 @@
-"""Paper-capital tracking persisted to model_improver/data/capital.parquet."""
-
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
 
+from db import get_engine
+from db_capital import append_capital_snapshot, ensure_capital_table, load_capital_history
+
 logger = logging.getLogger(__name__)
+
+_AGENT_MODE = os.getenv("AGENT_MODE", "SHADOW").upper()
+_INSTRUMENT = os.getenv("INSTRUMENT", "NIFTY").upper().replace(" ", "")
+_CAPITAL_TABLE = f"capital_snapshot_{_INSTRUMENT}_{_AGENT_MODE}".lower()
+
+SNAPSHOT_COLUMNS = ["timestamp", "capital", "daily_pnl", "cumulative_pnl", "open_margin_used", "event"]
 
 
 @dataclass
@@ -22,23 +30,10 @@ class CapitalSnapshot:
     event: str
 
 
-SNAPSHOT_COLUMNS = [
-    "timestamp",
-    "capital",
-    "daily_pnl",
-    "cumulative_pnl",
-    "open_margin_used",
-    "event",
-]
-
-
 class CapitalTracker:
-    INITIAL_CAPITAL = 100_000.0
+    INITIAL_CAPITAL = float(os.getenv("INITIAL_CAPITAL", "100000"))
 
     def __init__(self, data_dir: Path | None = None, initial_capital: float | None = None, capital_path: Path | None = None) -> None:
-        # Backward-compatible construction:
-        # - preferred: CapitalTracker(data_dir=Path(...))
-        # - legacy:   CapitalTracker(initial_capital=..., capital_path=Path(...))
         if capital_path is not None:
             self.capital_path = Path(capital_path)
         else:
@@ -47,10 +42,15 @@ class CapitalTracker:
         self.capital_path.parent.mkdir(parents=True, exist_ok=True)
 
         self.initial_capital = float(self.INITIAL_CAPITAL if initial_capital is None else initial_capital)
+        self._table = _CAPITAL_TABLE
+        self._engine = get_engine()
+        ensure_capital_table(self._engine, self._table)
         self._reserved_margin: dict[str, float] = {}
         self._released_trades: set[str] = set()
         self._current_capital = self.initial_capital
         self._cumulative_pnl = 0.0
+
+        logger.info("capital_tracker mode=%s table=%s initial=%.2f", _AGENT_MODE, self._table, self.initial_capital)
 
         history = self.load_history()
         if history.empty:
@@ -86,12 +86,10 @@ class CapitalTracker:
             return
         self._released_trades.add(tid)
         self._reserved_margin.pop(tid, None)
-        pnl = float(pnl_net)
-        self._cumulative_pnl += pnl
+        self._cumulative_pnl += float(pnl_net)
         self._current_capital = self.initial_capital + self._cumulative_pnl
         self.snapshot(event="EXIT")
 
-    # Backward compatibility for previous interface.
     def apply_realized_pnl(self, pnl: float, timestamp: datetime | None = None):
         self._cumulative_pnl += float(pnl)
         self._current_capital = self.initial_capital + self._cumulative_pnl
@@ -101,22 +99,22 @@ class CapitalTracker:
     def snapshot(self, event: str, timestamp: datetime | None = None) -> None:
         ts = timestamp or datetime.now(timezone.utc)
         daily_series = self.daily_pnl_series()
-        today = ts.date()
-        daily_pnl = float(daily_series.get(today, 0.0))
         row = CapitalSnapshot(
             timestamp=ts,
             capital=float(self._current_capital),
-            daily_pnl=daily_pnl,
+            daily_pnl=float(daily_series.get(ts.date(), 0.0)),
             cumulative_pnl=float(self._cumulative_pnl),
             open_margin_used=float(self._open_margin_used()),
             event=str(event),
         )
+        if self._engine is not None:
+            append_capital_snapshot(self._engine, asdict(row), self._table)
+        else:
+            history = self._load_parquet()
+            updated = pd.concat([history, pd.DataFrame([asdict(row)])], ignore_index=True)
+            updated.to_parquet(self.capital_path, index=False, engine="pyarrow")
 
-        history = self.load_history()
-        updated = pd.concat([history, pd.DataFrame([asdict(row)])], ignore_index=True)
-        updated.to_parquet(self.capital_path, index=False, engine="pyarrow")
-
-    def load_history(self) -> pd.DataFrame:
+    def _load_parquet(self) -> pd.DataFrame:
         if not self.capital_path.exists():
             return pd.DataFrame(columns=SNAPSHOT_COLUMNS)
         try:
@@ -128,11 +126,19 @@ class CapitalTracker:
                 df[column] = None
         return df[SNAPSHOT_COLUMNS].copy()
 
+    def load_history(self) -> pd.DataFrame:
+        db_df = load_capital_history(self._engine, self._table)
+        if db_df is not None:
+            for column in SNAPSHOT_COLUMNS:
+                if column not in db_df.columns:
+                    db_df[column] = None
+            return db_df[SNAPSHOT_COLUMNS].copy()
+        return self._load_parquet()
+
     def daily_pnl_series(self) -> pd.Series:
         history = self.load_history()
         if history.empty:
             return pd.Series(dtype=float)
-
         ts = pd.to_datetime(history["timestamp"], errors="coerce")
         cum = pd.to_numeric(history["cumulative_pnl"], errors="coerce").fillna(0.0)
         frame = pd.DataFrame({"date": ts.dt.date, "cum": cum}).dropna()
@@ -143,4 +149,3 @@ class CapitalTracker:
 
     def _open_margin_used(self) -> float:
         return float(sum(self._reserved_margin.values()))
-
