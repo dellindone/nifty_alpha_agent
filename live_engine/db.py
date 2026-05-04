@@ -63,6 +63,44 @@ paper_trade = Table(
 )
 
 
+live_trade = Table(
+    "live_trade",
+    metadata,
+    Column("trade_id", Text, primary_key=True),
+    Column("instrument", Text, nullable=False),
+    Column("timestamp_entry", DateTime, nullable=False),
+    Column("timestamp_exit", DateTime, nullable=True),
+    Column("direction", Integer, nullable=False),
+    Column("option_type", Text, nullable=True),
+    Column("strike", Integer, nullable=True),
+    Column("expiry_date", Date, nullable=True),
+    Column("entry_premium", Float, nullable=True),
+    Column("exit_premium", Float, nullable=True),
+    Column("lot_size", Integer, nullable=True),
+    Column("lots", Integer, nullable=True),
+    Column("sl_price", Float, nullable=False),
+    Column("current_sl", Float, nullable=True),
+    Column("target_price", Float, nullable=False),
+    Column("highest_premium", Float, nullable=True),
+    Column("trail_active", Boolean, nullable=False, server_default=text("false")),
+    Column("trail_bin", Text, nullable=True),
+    Column("trail_tf", Text, nullable=True),
+    Column("vix_at_entry", Float, nullable=True),
+    Column("atr_at_entry", Float, nullable=False),
+    Column("confidence", Float, nullable=False),
+    Column("direction_prob", Float, nullable=False),
+    Column("model_version", Text, nullable=False),
+    Column("trade_state", Text, nullable=False),
+    Column("exit_reason", Text, nullable=True),
+    Column("pnl_gross", Float, nullable=True),
+    Column("pnl_net", Float, nullable=True),
+    Column("charges", Float, nullable=True),
+    Column("option_symbol", Text, nullable=True),
+    Column("account_name", Text, nullable=True),
+    Column("broker_name", Text, nullable=True),
+)
+
+
 def _normalize_database_url(url: str) -> str:
     if url.startswith("postgresql+asyncpg://"):
         return url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
@@ -175,6 +213,7 @@ def _normalize_record(record: dict) -> dict:
 
 
 _TABLE_COLUMNS = {c.name for c in paper_trade.columns}
+_LIVE_TABLE_COLUMNS = {c.name for c in live_trade.columns}
 
 
 def upsert_trade(engine: Engine | None, record: dict) -> None:
@@ -197,3 +236,18 @@ def upsert_trade(engine: Engine | None, record: dict) -> None:
             conn.execute(stmt)
     except Exception as exc:
         logger.warning("Failed to upsert trade into DB: %s", exc)
+
+
+def upsert_live_trade(engine: Engine | None, record: dict) -> None:
+    if engine is None:
+        return
+    try:
+        normalized = _normalize_record(record)
+        normalized = {k: v for k, v in normalized.items() if k in _LIVE_TABLE_COLUMNS}
+        stmt = pg_insert(live_trade).values(**normalized)
+        update_cols = {c.name: stmt.excluded[c.name] for c in live_trade.columns if c.name != "trade_id"}
+        stmt = stmt.on_conflict_do_update(index_elements=[live_trade.c.trade_id], set_=update_cols)
+        with engine.begin() as conn:
+            conn.execute(stmt)
+    except Exception as exc:
+        logger.warning("Failed to upsert live_trade into DB: %s", exc)
