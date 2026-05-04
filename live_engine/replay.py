@@ -3,7 +3,6 @@
 Usage (from repo root):
     python main.py --replay --date 2026-05-04
     python main.py --replay --date 2026-05-04 --dataset /path/to/features.parquet
-    python main.py --replay --date 2026-05-04 --speed 0   # instant (default)
     python main.py --replay --date 2026-05-04 --speed 5   # 5s pause between bars
 """
 from __future__ import annotations
@@ -11,20 +10,21 @@ from __future__ import annotations
 import logging
 import os
 import time
-from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
 
-from config.settings import IST, Paths
-from lib.signal_handler import SignalHandler
+from config.settings import IST, Paths, get_instrument_config
+from lib.signal_handler import TradeSignal
 from lib.reporter import Reporter
 from lib.journal import TradeJournal
-from model.predict import NiftyPredictor
+from model.predict import NiftyPredictor, ModelPrediction
 from risk.capital_tracker import CapitalTracker
 from risk.position_sizer import stop_loss_from_bin
 from config.instruments import LOT_SIZES
+from utils.market_calendar import next_expiry
 
 logger = logging.getLogger(__name__)
 
@@ -32,18 +32,18 @@ _DEFAULT_DATASET = str(
     Path(__file__).resolve().parents[3]
     / "trading_research/data/nifty/NIFTY_features_v5_oos_2026.parquet"
 )
+_STRIKE_STEP = {"NIFTY": 50, "BANKNIFTY": 100, "SENSEX": 100}
 
 
 @dataclass
 class _OpenTrade:
     trade_id: str
-    direction: int          # 1=CE 0=PE
+    direction: int
     entry_close: float
     sl_dist: float
     target_dist: float
     entry_bar: int
     lots: int
-    entry_premium: float = 0.0
     bars_held: int = 0
 
 
@@ -60,16 +60,13 @@ class ReplayRunner:
         self.replay_date = replay_date
         self.speed = speed
         self.dataset_path = dataset_path or _DEFAULT_DATASET
-        art = Path(artifacts_dir)
         self.predictor = NiftyPredictor()
-        self.predictor.load(art, self.instrument)
-        self.signal_handler = SignalHandler()
+        self.predictor.load(Path(artifacts_dir), self.instrument)
         data_dir = Paths.DATA_DIRS[self.instrument.lower()]
         data_dir.mkdir(parents=True, exist_ok=True)
-        journal = TradeJournal(data_dir)
         cap = CapitalTracker(data_dir=data_dir)
         self.reporter = Reporter(
-            journal, cap,
+            TradeJournal(data_dir), cap,
             os.getenv("TELEGRAM_BOT_TOKEN", ""),
             os.getenv("TELEGRAM_CHAT_ID", ""),
         )
@@ -85,7 +82,82 @@ class ReplayRunner:
         ist = df.index.tz_convert("Asia/Kolkata")
         return df[ist.date == pd.Timestamp(self.replay_date).date()]
 
-    def _check_open_trades(self, close: float, now_ist: datetime, bar_idx: int) -> None:
+    def _make_signal(
+        self,
+        prediction: ModelPrediction,
+        row: pd.Series,
+        now_ist: datetime,
+        daily_pnl: float,
+        daily_count: int,
+    ) -> tuple[TradeSignal | None, str]:
+        """Run all filter checks and build TradeSignal from parquet data (no live option chain)."""
+        cfg = get_instrument_config(self.instrument)
+
+        if not prediction.should_trade or prediction.trade_class == "NO_TRADE":
+            return None, "MODEL_NO_TRADE"
+        if len(self._open_trades) > 0:
+            return None, f"TRADE_ALREADY_OPEN ({len(self._open_trades)} open)"
+
+        sb = int(row.get("session_bar", 999))
+        if sb < cfg.min_session_bar:
+            return None, f"TOO_EARLY bar={sb} min={cfg.min_session_bar}"
+        if prediction.confidence < cfg.min_confidence:
+            return None, f"LOW_CONF {prediction.confidence:.0%} < {cfg.min_confidence:.0%}"
+        if daily_pnl <= -abs(cfg.daily_loss_limit):
+            return None, f"DAILY_LOSS_LIMIT pnl=₹{daily_pnl:.0f}"
+        if daily_count >= cfg.max_trades_per_day:
+            return None, f"MAX_TRADES({daily_count})"
+
+        atr = float(row.get("atr_14", 0.0))
+        vix = float(row.get("vix", 0.0))
+        if atr <= 0:
+            return None, "ZERO_ATR"
+
+        sl = float(stop_loss_from_bin(prediction.sl_bin, atr, vix, cfg=cfg))
+        tp = float(prediction.phase1_target)
+        if tp <= 0 or sl <= 0:
+            return None, f"ZERO_SL_OR_TARGET sl={sl:.2f} tp={tp:.2f}"
+        rr = tp / sl
+        if rr < cfg.min_rr:
+            return None, f"LOW_RR {rr:.2f} < {cfg.min_rr} (sl={sl:.2f} tp={tp:.2f})"
+
+        option_type = "CE" if prediction.direction == 1 else "PE"
+        premium_col = "ce_premium" if option_type == "CE" else "pe_premium"
+        entry_premium = float(row.get(premium_col, 0.0))
+
+        close = float(row.get("close", 0.0))
+        step = _STRIKE_STEP.get(self.instrument, 50)
+        atm = int(round(close / step) * step)
+        # Mirror live strike_selector NORMAL mode: prefer 2 ITM
+        # CE (bullish): 2 strikes below ATM; PE (bearish): 2 strikes above ATM
+        if option_type == "CE":
+            strike = atm - 2 * step
+        else:
+            strike = atm + 2 * step
+        lot_size = LOT_SIZES.get(self.instrument, 50)
+        expiry = next_expiry(self.instrument, now_ist.date())
+
+        signal = TradeSignal(
+            instrument=self.instrument,
+            direction=prediction.direction,
+            option_type=option_type,
+            strike=strike,
+            expiry_date=expiry,
+            entry_premium=entry_premium,
+            sl_price=sl,
+            target_price=tp,
+            trail_bin=str(prediction.trail_bin),
+            trail_tf=str(prediction.trail_tf),
+            confidence=float(prediction.confidence),
+            direction_prob=float(prediction.direction_prob),
+            vix=vix,
+            atr=atr,
+            lot_size=lot_size,
+            lots=1,
+        )
+        return signal, ""
+
+    def _check_open_trades(self, close: float, now_ist: datetime) -> None:
         still_open = []
         for t in self._open_trades:
             t.bars_held += 1
@@ -99,10 +171,7 @@ class ReplayRunner:
                 reason = "EOD_EXIT"
             if reason:
                 pnl = (move - 0.05) * LOT_SIZES.get(self.instrument, 50) * t.lots
-                logger.info(
-                    "REPLAY_EXIT trade_id=%s reason=%s move=%.1f pnl=₹%.0f bars=%d",
-                    t.trade_id, reason, move, pnl, t.bars_held,
-                )
+                logger.info("REPLAY_EXIT trade_id=%s reason=%s pnl=₹%.0f bars=%d", t.trade_id, reason, pnl, t.bars_held)
                 print(f"  [{now_ist.strftime('%H:%M')}] EXIT {reason}  move={move:+.1f}  pnl=₹{pnl:,.0f}  bars={t.bars_held}")
             else:
                 still_open.append(t)
@@ -118,61 +187,53 @@ class ReplayRunner:
         print(f"REPLAY  {self.replay_date}  |  {len(bars)} bars  |  model={self.instrument}")
         print(f"{'='*62}")
 
-        daily_pnl, daily_count = 0.0, 0
         missing = [f for f in self.predictor.selected_features if f not in bars.columns]
         if missing:
-            print(f"WARNING: {len(missing)} features missing from dataset: {missing[:3]}...")
+            print(f"WARNING: {len(missing)} features missing: {missing[:3]}...")
+
+        daily_pnl, daily_count = 0.0, 0
 
         for bar_idx, (ts, row_series) in enumerate(bars.iterrows()):
             now_ist = ts.tz_convert(IST)
-            feature_row = pd.DataFrame([row_series])
             close = float(row_series.get("close", 0.0))
-
-            self._check_open_trades(close, now_ist, bar_idx)
+            self._check_open_trades(close, now_ist)
 
             try:
-                prediction = self.predictor.predict(feature_row)
+                prediction = self.predictor.predict(pd.DataFrame([row_series]))
             except Exception as exc:
                 logger.warning("predict failed bar=%d: %s", bar_idx, exc)
                 continue
 
-            signal = self.signal_handler.process(
-                prediction=prediction,
-                feature_row=feature_row,
-                instrument=self.instrument,
-                daily_pnl=daily_pnl,
-                daily_trade_count=daily_count,
-                open_trade_count=len(self._open_trades),
-            )
-
+            signal, block_reason = self._make_signal(prediction, row_series, now_ist, daily_pnl, daily_count)
             conf = f"{prediction.confidence:.0%}"
-            tc = prediction.trade_class
+            tc = str(prediction.trade_class or "")
             sb = int(row_series.get("session_bar", -1))
-            atr = float(row_series.get("atr_14", 0.0))
 
-            if signal is not None and not signal.blocked:
-                sl = signal.sl_price
-                tp = signal.target_price
-                rr = tp / sl if sl > 0 else 0
+            if signal is not None:
+                rr = signal.target_price / signal.sl_price
                 self._trade_seq += 1
-                tid = f"REPLAY_{self._trade_seq:03d}"
                 self._open_trades.append(_OpenTrade(
-                    trade_id=tid, direction=signal.direction,
-                    entry_close=close, sl_dist=sl, target_dist=tp,
-                    entry_bar=bar_idx, lots=signal.lots,
+                    trade_id=f"REPLAY_{self._trade_seq:03d}",
+                    direction=signal.direction,
+                    entry_close=close,
+                    sl_dist=signal.sl_price,
+                    target_dist=signal.target_price,
+                    entry_bar=bar_idx,
+                    lots=signal.lots,
                 ))
                 daily_count += 1
                 msg = (f"  [{now_ist.strftime('%H:%M')}] BAR={sb:>2}  SIGNAL {signal.option_type}"
-                       f"  conf={conf}  rr={rr:.2f}  sl={sl:.1f}  tp={tp:.1f}  *** ENTERED ***")
+                       f"  strike={signal.strike}  entry=₹{signal.entry_premium:.2f}"
+                       f"  conf={conf}  rr={rr:.2f}  sl={signal.sl_price:.1f}  tp={signal.target_price:.1f}  *** ENTERED ***")
                 logger.info("REPLAY_ENTRY %s", msg)
-                self.reporter.send_signal_alert(signal)
-            elif signal is not None and signal.blocked:
-                msg = (f"  [{now_ist.strftime('%H:%M')}] BAR={sb:>2}  {tc:<15} conf={conf}"
-                       f"  BLOCKED({signal.block_reason})")
-                logger.info("REPLAY_BLOCKED %s", msg)
+                self.reporter._send(
+                    f"[REPLAY {self.replay_date} {now_ist.strftime('%H:%M')} IST]\n"
+                    f"🟡 {signal.option_type} {signal.strike} | Expiry: {signal.expiry_date.strftime('%d-%b-%y')}\n"
+                    f"Entry: ₹{signal.entry_premium:.2f} | SL: ₹{signal.sl_price:.2f} | Target: ₹{signal.target_price:.2f}\n"
+                    f"RR: {rr:.2f} | Confidence: {conf} | VIX: {signal.vix:.1f}"
+                )
             else:
-                reason = self.signal_handler.last_block_reason or "NO_SIGNAL"
-                msg = f"  [{now_ist.strftime('%H:%M')}] BAR={sb:>2}  {tc:<15} conf={conf}  {reason}"
+                msg = f"  [{now_ist.strftime('%H:%M')}] BAR={sb:>2}  {tc:<15} conf={conf}  {block_reason}"
                 logger.info("REPLAY_POLL %s", msg)
 
             print(msg)
@@ -180,5 +241,5 @@ class ReplayRunner:
                 time.sleep(self.speed)
 
         print(f"\n{'='*62}")
-        print(f"  Total signals entered: {daily_count}  |  Open at EOD: {len(self._open_trades)}")
+        print(f"  Trades entered: {daily_count}  |  Open at EOD: {len(self._open_trades)}")
         print(f"{'='*62}\n")
