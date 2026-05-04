@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from datetime import datetime, timezone
 
@@ -61,7 +62,7 @@ class Display:
         lines = [
             sep,
             f"  {'▲' if price > 0 else '─'}  {self._e.instrument}  {price:>10,.2f}    {time_str}    polls: {self._e._poll_count}",
-            f"  VIX  {self._e._last_vix:.1f}   ATR  {self._e._last_atr:.1f}    OPEN  {len(self._e.shadow_mode.open_trades())}    CAP  ₹{capital:,.0f}",
+            f"  VIX  {self._e._last_vix:.1f}   ATR  {self._e._last_atr:.1f}    OPEN  {len(self._e.shadow_mode.open_trades())}    CAP  ₹{capital:,.0f}    {os.getenv('AGENT_MODE', 'SHADOW')} | {getattr(self._e.shadow_mode, 'broker_name', 'shadow').upper()}",
             thin,
             *health_rows,
             f"  SCORE  {score}/100  {overall_icon}  {overall}",

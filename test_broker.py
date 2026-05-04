@@ -30,10 +30,14 @@ if not selected:
     print("ERROR: strike selector returned nothing")
     sys.exit(1)
 
-raw_symbol = str(selected.get("symbol", ""))
+instrument_name = str(selected.get("instrument", ""))
+raw_symbol = f"NSE:{instrument_name}" if instrument_name else ""
 strike = int(float(selected.get("strike", 0)))
 ltp = float(selected.get("lp", 0))
 print(f"Option: {raw_symbol}  strike={strike}  ltp={ltp}")
+if not instrument_name:
+    print("ERROR: no instrument symbol in selected strike")
+    sys.exit(1)
 
 broker = BrokerFactory.create(Trading.BROKER_NAME)
 print("Placing 1 qty MARKET BUY order ...")
