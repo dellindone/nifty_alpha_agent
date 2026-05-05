@@ -136,7 +136,7 @@ class CandlePoll:
         frame_5m  = _get_cached_frame(sym, "5",  lambda s, r: _fetch(s, r, bars=300, days_back=30))
         frame_15m = _get_cached_frame(sym, "15", lambda s, r: _fetch(s, r, bars=300, days_back=60))
         frame_60m = _get_cached_frame(sym, "60", lambda s, r: _fetch(s, r, bars=300, days_back=99))
-        frame_D   = _get_cached_frame(sym, "D",  lambda s, r: _fetch(s, r, bars=600, days_back=900))
+        frame_D   = _get_cached_frame(sym, "D",  lambda s, r: _fetch(s, r, bars=300, days_back=365))
 
         # Any required frame still cold after a failed fetch — skip poll gracefully.
         missing = [r for r, f in [("5m", frame_5m), ("60m", frame_60m), ("D", frame_D)] if f is None]
