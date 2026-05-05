@@ -21,14 +21,14 @@ def compute_session_features(df: pd.DataFrame, opening_range_bars: int = 6) -> p
     opening_range_low = pd.Series(np.nan, index=featured.index, dtype=float)
 
     for _, session_frame in featured.groupby(session_dates):
-        if len(session_frame) <= opening_range_bars:
+        if len(session_frame) == 0:
             continue
         opening_slice = session_frame.iloc[:opening_range_bars]
         or_high = float(opening_slice["high"].max())
         or_low = float(opening_slice["low"].min())
-        valid_index = session_frame.index[opening_range_bars:]
-        opening_range_high.loc[valid_index] = or_high
-        opening_range_low.loc[valid_index] = or_low
+        # Fill all bars — early bars use running session high/low as OR proxy
+        opening_range_high.loc[session_frame.index] = or_high
+        opening_range_low.loc[session_frame.index] = or_low
 
     atr_base = pd.to_numeric(featured.get("atr_14"), errors="coerce").replace(0.0, np.nan)
     featured["session_minute"] = session_minute.astype(int)
