@@ -74,6 +74,7 @@ INSTRUMENT_CONFIGS: dict[str, InstrumentConfig] = {
         atr_mult_scale=1.25,
         trail_width_mult=0.5,
         trail_activation_rr=1.0,
+        min_session_bar=0,
     ),
 }
 
