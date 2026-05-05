@@ -89,4 +89,12 @@ class Display:
 
     def _log_poll(self, now_ist: datetime, signal_label: str, open_trades_count: int | None = None) -> None:
         count = len(self._e.journal.open_trades()) if open_trades_count is None else int(open_trades_count)
-        logger.info("poll timestamp=%s signal=%s open_trades=%d", now_ist.isoformat(), signal_label, count)
+        d = self._e._last_pred_data or {}
+        logger.info(
+            "poll timestamp=%s signal=%s decision=%s open_trades=%d "
+            "direction=%s confidence=%s sl_bin=%s trail_bin=%s trail_tf=%s vix=%.1f atr=%.1f",
+            now_ist.isoformat(), signal_label, self._e._last_decision, count,
+            d.get("direction", "?"), f"{d.get('confidence', 0)*100:.0f}%",
+            d.get("sl_bin", "?"), d.get("trail_bin", "?"), d.get("trail_tf", "?"),
+            self._e._last_vix, self._e._last_atr,
+        )
