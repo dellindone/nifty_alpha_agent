@@ -13,7 +13,11 @@
       "Bash(git diff*)",
       "Bash(git status*)",
       "Bash(find . -name*)",
-      "Bash(grep -*)"
+      "Bash(grep -*)",
+      "Bash(.venv/bin/python -c \"import sys; sys.path.insert\\(0, 'live_engine'\\); from lib.journal import Journal; print\\('OK'\\)\")",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git checkout *)"
     ]
   },
   "hooks": {
