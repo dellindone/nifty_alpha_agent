@@ -24,7 +24,8 @@ def make_record(**k):
 
 def _upsert(engine, row):
     t = db.paper_trade
-    vals = {c.name: (None if pd.isna(row.get(c.name)) else row.get(c.name)) for c in t.columns if c.name in row}
+    normalized = db._normalize_record(row)
+    vals = {c.name: (None if pd.isna(normalized.get(c.name)) else normalized.get(c.name)) for c in t.columns if c.name in normalized}
     s = sqlite_insert(t).values(**vals)
     with engine.begin() as c:
         c.execute(s.on_conflict_do_update(index_elements=[t.c.trade_id], set_={k: s.excluded[k] for k in vals if k != "trade_id"}))
@@ -39,10 +40,11 @@ def parquet_journal(tmp_path, monkeypatch):
 @pytest.fixture
 def db_journal(tmp_path, monkeypatch):
     eng = create_engine("sqlite+pysqlite:///:memory:", future=True, connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    db.metadata.create_all(eng, tables=[db.paper_trade], checkfirst=True)
     monkeypatch.setenv("DATABASE_URL", "sqlite://dummy")
     monkeypatch.setattr(jm, "get_engine", lambda: eng)
     monkeypatch.setattr(jm, "ensure_table_exists", lambda _e: db.metadata.create_all(eng, tables=[db.paper_trade], checkfirst=True))
-    monkeypatch.setattr(jm, "_upsert_fn", lambda e, r: _upsert(e, r))
+    monkeypatch.setattr(jm, "upsert_trade", lambda e, r: _upsert(e, r))
     return Journal(tmp_path)
 
 

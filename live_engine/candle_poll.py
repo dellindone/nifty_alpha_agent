@@ -104,7 +104,7 @@ class CandlePoll:
                 trade_signal = None
                 self._e.signal_handler.last_block_reason = "NO_NEW_TRADES_AFTER_15:15"
             else:
-                trade_signal = self._e.signal_handler.process(prediction=prediction, feature_row=feature_row, instrument=self._e.instrument, daily_pnl=self._e._last_daily_pnl, daily_trade_count=self._e._last_daily_count, open_trade_count=len(self._e.journal.open_trades()))
+                trade_signal = self._e.signal_handler.process(prediction=prediction, feature_row=feature_row, instrument=self._e.instrument, daily_pnl=self._e._last_daily_pnl, daily_trade_count=self._e._last_daily_count, open_trade_count=len(self._e.shadow_mode.open_trades()))
             if trade_signal is not None and trade_signal.blocked:
                 self._e.reporter.send_signal_alert(trade_signal, blocked=True)
                 self._e._last_decision = f"NO_SIGNAL ({trade_signal.block_reason})"
@@ -115,7 +115,7 @@ class CandlePoll:
                 signal_label = "NONE"
                 reason = self._e.signal_handler.last_block_reason or self._e._build_no_signal_decision(prediction)
                 self._e._last_decision = f"NO_SIGNAL ({reason})"
-            self._e._log_poll(now_ist, signal_label, len(self._e.journal.open_trades()))
+            self._e._log_poll(now_ist, signal_label, len(self._e.shadow_mode.open_trades()))
             self._e._print_live_display(now_ist)
         except Exception as exc:
             logger.exception("poll_failed timestamp=%s error=%s", now_ist.isoformat(), exc)

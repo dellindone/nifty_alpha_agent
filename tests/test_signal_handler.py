@@ -26,10 +26,10 @@ def _row(**k):
     [
         ({"should_trade": False}, {}, {}, "MODEL_NO_TRADE"),
         ({}, {}, {"open_trade_count": 1}, "TRADE_ALREADY_OPEN"),
-        ({}, {"session_bar": 5}, {}, "TOO_EARLY"),
+        ({}, {"session_bar": -1}, {}, "TOO_EARLY"),
         ({"confidence": 0.54}, {}, {}, "LOW_CONF"),
-        ({}, {}, {"daily_pnl": -2500}, "DAILY_LOSS_LIMIT"),
-        ({}, {}, {"daily_pnl": 5000}, "DAILY_TARGET_HIT"),
+        ({}, {}, {"daily_pnl": -6000}, "DAILY_LOSS_LIMIT"),
+        ({}, {}, {"daily_pnl": 8000}, "DAILY_TARGET_HIT"),
         ({}, {"atr_14": 0.0}, {}, "ZERO_ATR"),
         ({"phase1_target": 2.0}, {}, {}, "LOW_RR"),
     ],

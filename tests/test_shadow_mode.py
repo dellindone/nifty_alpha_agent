@@ -30,8 +30,8 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(db, "get_engine", lambda: eng)
     monkeypatch.setattr(cm, "get_engine", lambda: eng)
     monkeypatch.setattr(jm, "get_engine", lambda: eng)
-    monkeypatch.setattr(jm, "_upsert_fn", lambda e, r: _upsert(e, db.paper_trade, r))
-    monkeypatch.setattr(jm, "ensure_table_exists", lambda _e: db.metadata.create_all(eng, tables=[db.paper_trade], checkfirst=True))
+    db.metadata.create_all(eng, tables=[db.paper_trade], checkfirst=True)
+    monkeypatch.setattr(jm, "upsert_trade", lambda e, r: _upsert(e, db.paper_trade, r))
     j = Journal(tmp_path)
     c = CapitalTracker(data_dir=tmp_path, initial_capital=100000)
     return j, c

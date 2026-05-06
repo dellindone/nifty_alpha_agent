@@ -12,21 +12,30 @@ import logging
 import os
 import signal
 import sys
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent / "live_engine"))
 
 
 def _setup_logging(verbose: bool) -> None:
-    from config.settings import Paths
+    from config.settings import IST, Paths
+
+    class _ISTFormatter(logging.Formatter):
+        def formatTime(self, record, datefmt=None):  # noqa: N802 - stdlib hook name
+            ts = datetime.fromtimestamp(record.created, IST)
+            return ts.strftime("%Y-%m-%d %H:%M:%S,%f")[:-3] + " IST"
+
     Paths.LOGS.mkdir(parents=True, exist_ok=True)
     log_file = Paths.LOGS / "agent.log"
     level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        handlers=[logging.StreamHandler(), logging.FileHandler(log_file, encoding="utf-8")],
-    )
+    formatter = _ISTFormatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+    root_logger.setLevel(level)
+    for handler in (logging.StreamHandler(), logging.FileHandler(log_file, encoding="utf-8")):
+        handler.setFormatter(formatter)
+        root_logger.addHandler(handler)
     sys.stderr = open(log_file, "a", encoding="utf-8", buffering=1)
 
 

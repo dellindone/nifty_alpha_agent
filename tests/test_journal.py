@@ -7,16 +7,27 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.pool import StaticPool
 
 import db
+from config.settings import IST
 import lib.journal as jm
 from lib.journal import Journal, TradeRecord
 
 
 def _upsert(engine, row):
     t = db.paper_trade
-    vals = {k: (None if pd.isna(v) else v) for k, v in row.items() if k in {c.name for c in t.columns}}
+    normalized = db._normalize_record(row)
+    vals = {k: (None if pd.isna(v) else v) for k, v in normalized.items() if k in {c.name for c in t.columns}}
     stmt = sqlite_insert(t).values(**vals)
     with engine.begin() as c:
-        c.execute(stmt.on_conflict_do_update(index_elements=[t.c.trade_id], set_={k: stmt.excluded[k] for k in row if k in t.c and k != "trade_id"}))
+        c.execute(stmt.on_conflict_do_update(index_elements=[t.c.trade_id], set_={k: stmt.excluded[k] for k in vals if k in t.c and k != "trade_id"}))
+
+
+def _upsert_live(engine, row):
+    t = db.live_trade
+    normalized = db._normalize_record(row)
+    vals = {k: (None if pd.isna(v) else v) for k, v in normalized.items() if k in {c.name for c in t.columns}}
+    stmt = sqlite_insert(t).values(**vals)
+    with engine.begin() as c:
+        c.execute(stmt.on_conflict_do_update(index_elements=[t.c.trade_id], set_={k: stmt.excluded[k] for k in vals if k in t.c and k != "trade_id"}))
 
 
 @pytest.fixture
@@ -25,8 +36,8 @@ def journal(tmp_path, monkeypatch):
     monkeypatch.setenv("AGENT_MODE", "SHADOW")
     monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///:memory:")
     monkeypatch.setattr(jm, "get_engine", lambda: eng)
-    monkeypatch.setattr(jm, "ensure_table_exists", lambda _e: db.metadata.create_all(eng, tables=[db.paper_trade], checkfirst=True))
-    monkeypatch.setattr(jm, "_upsert_fn", lambda e, r: _upsert(e, r))
+    monkeypatch.setattr(jm, "upsert_trade", lambda e, r: _upsert(e, r))
+    db.metadata.create_all(eng, tables=[db.paper_trade], checkfirst=True)
     return Journal(tmp_path)
 
 
@@ -41,6 +52,9 @@ def test_journal_entry_exit_open_state_and_updates(journal):
     journal.log_entry(_rec("t1", t1)); journal.log_entry(_rec("t2", t2))
     all_df = journal.load_all()
     assert {"t1", "t2"} == set(all_df.trade_id.astype(str))
+    first_entry = all_df.set_index("trade_id").loc["t1", "timestamp_entry"]
+    assert first_entry.tzinfo is not None
+    assert first_entry.tz_convert(IST).hour == 9 and first_entry.tz_convert(IST).minute == 30
     assert set(journal.load_open_trades().trade_id.astype(str)) == {"t1", "t2"}
     journal.update_trade_state("t1", current_sl=95.0, highest_premium=130.0, trail_active=True)
     one = journal.load_all().set_index("trade_id").loc["t1"]
@@ -49,3 +63,40 @@ def test_journal_entry_exit_open_state_and_updates(journal):
     row = journal.load_all().set_index("trade_id").loc["t1"]
     assert float(row.exit_premium) == 125.0 and row.exit_reason == "TARGET_HIT" and float(row.pnl_net) == 1800.0
     assert row.timestamp_exit is not None and set(journal.open_trades().trade_id.astype(str)) == {"t2"}
+
+
+def _live_journal(tmp_path, monkeypatch):
+    eng = create_engine("sqlite+pysqlite:///:memory:", future=True, connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    monkeypatch.setenv("AGENT_MODE", "LIVE")
+    monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///:memory:")
+    monkeypatch.setattr(jm, "get_engine", lambda: eng)
+    monkeypatch.setattr(jm, "upsert_live_trade", lambda e, r: _upsert_live(e, r))
+    db.metadata.create_all(eng, tables=[db.live_trade], checkfirst=True)
+    return Journal(tmp_path), eng
+
+
+def test_live_journal_sets_live_table_and_trade_state(tmp_path, monkeypatch):
+    journal, _ = _live_journal(tmp_path, monkeypatch)
+    journal.log_entry(_rec("live-1", datetime(2026, 5, 6, 9, 5, tzinfo=timezone.utc)))
+    row = journal.load_all().set_index("trade_id").loc["live-1"]
+    assert row.trade_state == "OPEN"
+
+
+def test_live_update_trade_state_preserves_trade_state(tmp_path, monkeypatch):
+    journal, _ = _live_journal(tmp_path, monkeypatch)
+    journal.log_entry(_rec("live-2", datetime(2026, 5, 6, 9, 5, tzinfo=timezone.utc)))
+    journal.update_trade_state("live-2", current_sl=90.0, highest_premium=120.0, trail_active=True)
+    row = journal.load_all().set_index("trade_id").loc["live-2"]
+    assert row.trade_state == "OPEN"
+    assert float(row.current_sl) == 90.0
+    assert bool(row.trail_active) is True
+
+
+def test_live_log_exit_sets_closed_state(tmp_path, monkeypatch):
+    journal, _ = _live_journal(tmp_path, monkeypatch)
+    ts = datetime(2026, 5, 6, 9, 5, tzinfo=timezone.utc)
+    journal.log_entry(_rec("live-3", ts))
+    journal.log_exit("live-3", 130.0, "TARGET_HIT", datetime(2026, 5, 6, 10, 0, tzinfo=timezone.utc), pnl_gross=2250.0, pnl_net=2175.0, charges=75.0)
+    row = journal.load_all().set_index("trade_id").loc["live-3"]
+    assert row.trade_state == "CLOSED"
+    assert float(row.exit_premium) == 130.0

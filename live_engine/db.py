@@ -10,6 +10,8 @@ from sqlalchemy import Boolean, Column, Date, DateTime, Float, Integer, MetaData
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import Engine
 
+from utils.time_utils import is_null_timestamp, to_ist_naive_datetime
+
 logger = logging.getLogger(__name__)
 
 metadata = MetaData()
@@ -190,21 +192,11 @@ def _is_nat_or_nan(val: object) -> bool:
     """Return True for pd.NaT, float NaN, or any value that compares unequal to itself."""
     if val is None:
         return False
-    try:
-        return val != val  # NaT and NaN are the only values where x != x
-    except Exception:
-        return False
+    return bool(is_null_timestamp(val))
 
 
 def _coerce_timestamp(val: object) -> datetime | None:
-    if val is None or _is_nat_or_nan(val):
-        return None
-    if isinstance(val, datetime) and not _is_nat_or_nan(val):
-        return val
-    try:
-        return datetime.fromisoformat(str(val)[:19])
-    except Exception:
-        return None
+    return to_ist_naive_datetime(val)
 
 
 def _to_python_scalar(val: object) -> object:

@@ -15,15 +15,11 @@ from sqlalchemy import select
 
 from base.journal import BaseJournal
 from utils.charge_calculator import calculate_charges
+from utils.time_utils import to_ist_naive_datetime, to_ist_series
 from db import ensure_table_exists, get_engine, live_trade, paper_trade, upsert_live_trade, upsert_trade
 from config.settings import Paths
 
 logger = logging.getLogger(__name__)
-
-_IS_LIVE = os.getenv("AGENT_MODE", "SHADOW").upper() == "LIVE"
-_trade_table = live_trade if _IS_LIVE else paper_trade
-_upsert_fn = upsert_live_trade if _IS_LIVE else upsert_trade
-
 
 @dataclass
 class TradeRecord:
@@ -87,6 +83,13 @@ TRADE_COLUMNS = [
     "atr_at_entry",
     "model_version",
     "option_symbol",
+    "trade_state",
+    "broker_order_id",
+    "broker_exit_order_id",
+    "fill_price",
+    "exit_fill_price",
+    "account_name",
+    "broker_name",
 ]
 
 
@@ -115,6 +118,9 @@ class Journal(BaseJournal):
 
     def __init__(self, data_dir: Path) -> None:
         super().__init__(data_dir, "trades.parquet")
+        self._is_live = os.getenv("AGENT_MODE", "SHADOW").upper() == "LIVE"
+        self._trade_table = live_trade if self._is_live else paper_trade
+        self._upsert_fn = upsert_live_trade if self._is_live else upsert_trade
         self._engine = None
         if not os.getenv("DATABASE_URL", "").strip():
             logger.warning("DATABASE_URL missing; Journal will use parquet backup only.")
@@ -134,7 +140,7 @@ class Journal(BaseJournal):
         if self._engine is None:
             return None
         try:
-            stmt = select(_trade_table).order_by(_trade_table.c.timestamp_entry)
+            stmt = select(self._trade_table).order_by(self._trade_table.c.timestamp_entry)
             with self._engine.connect() as conn:
                 result = conn.execute(stmt)
                 rows = [dict(row._mapping) for row in result]
@@ -151,9 +157,9 @@ class Journal(BaseJournal):
             return None
         try:
             stmt = (
-                select(_trade_table)
-                .where(_trade_table.c.timestamp_exit.is_(None))
-                .order_by(_trade_table.c.timestamp_entry)
+                select(self._trade_table)
+                .where(self._trade_table.c.timestamp_exit.is_(None))
+                .order_by(self._trade_table.c.timestamp_entry)
             )
             with self._engine.connect() as conn:
                 result = conn.execute(stmt)
@@ -192,10 +198,10 @@ class Journal(BaseJournal):
         row = asdict(record)
         if not row.get("trade_id"):
             row["trade_id"] = str(uuid4())
-        if _IS_LIVE:
+        if self._is_live:
             row.setdefault("trade_state", "OPEN")
         if self._engine is not None:
-            _upsert_fn(self._engine, row)
+            self._upsert_fn(self._engine, row)
         else:
             all_trades = self._load_from_parquet()
             new_row = pd.DataFrame([row]).dropna(axis=1, how="all")
@@ -258,17 +264,17 @@ class Journal(BaseJournal):
                 if p_mask.any():
                     for col, val in exit_updates.items():
                         if col in ("timestamp_entry", "timestamp_exit") and val is not None:
-                            ts = pd.Timestamp(val)
-                            ts = ts.tz_convert("UTC") if ts.tzinfo is not None else ts.tz_localize("UTC")
-                            val = ts.floor("ms")
+                            parquet_trades[col] = to_ist_series(parquet_trades[col])
+                            localized = to_ist_naive_datetime(val)
+                            val = pd.Timestamp(localized).floor("s") if localized is not None else pd.NaT
                         parquet_trades.loc[p_mask, col] = val
                     self._persist(parquet_trades)
         else:
             # DB is primary source — upsert directly, no parquet write.
             updated_row = dict(row) | exit_updates
-            if _IS_LIVE:
-                updated_row.setdefault("trade_state", "CLOSED")
-            _upsert_fn(self._engine, updated_row)
+            if self._is_live:
+                updated_row["trade_state"] = "CLOSED"
+            self._upsert_fn(self._engine, updated_row)
 
     def update_trade(self, trade_id: str, updates: dict) -> None:
         all_trades = self.load_all()
@@ -287,7 +293,9 @@ class Journal(BaseJournal):
             .to_dict()
         )
         if self._engine is not None:
-            _upsert_fn(self._engine, updated_row)
+            if self._is_live and not updated_row.get("trade_state"):
+                updated_row["trade_state"] = "OPEN"
+            self._upsert_fn(self._engine, updated_row)
         else:
             self._persist(all_trades)
 
@@ -310,7 +318,9 @@ class Journal(BaseJournal):
             .to_dict()
         )
         if self._engine is not None:
-            _upsert_fn(self._engine, updated_row)
+            if self._is_live and not updated_row.get("trade_state"):
+                updated_row["trade_state"] = "OPEN"
+            self._upsert_fn(self._engine, updated_row)
         else:
             self._persist(all_trades)
 

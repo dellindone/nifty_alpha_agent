@@ -17,7 +17,8 @@ from risk.capital_tracker import CapitalTracker
 
 def _upsert(engine, row):
     t = db.paper_trade
-    vals = {k: (None if pd.isna(v) else v) for k, v in row.items() if k in {c.name for c in t.columns}}
+    normalized = db._normalize_record(row)
+    vals = {k: (None if pd.isna(v) else v) for k, v in normalized.items() if k in {c.name for c in t.columns}}
     stmt = sqlite_insert(t).values(**vals)
     with engine.begin() as c:
         c.execute(stmt.on_conflict_do_update(index_elements=[t.c.trade_id], set_={k: stmt.excluded[k] for k in vals if k != "trade_id"}))
@@ -30,8 +31,8 @@ def rep(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///:memory:")
     monkeypatch.setattr(jm, "get_engine", lambda: eng)
     monkeypatch.setattr(cm, "get_engine", lambda: eng)
-    monkeypatch.setattr(jm, "ensure_table_exists", lambda _e: db.metadata.create_all(eng, tables=[db.paper_trade], checkfirst=True))
-    monkeypatch.setattr(jm, "_upsert_fn", lambda e, r: _upsert(e, r))
+    db.metadata.create_all(eng, tables=[db.paper_trade], checkfirst=True)
+    monkeypatch.setattr(jm, "upsert_trade", lambda e, r: _upsert(e, r))
     return Reporter(Journal(tmp_path), CapitalTracker(data_dir=tmp_path, initial_capital=100000))
 
 

@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from utils.time_utils import to_ist_series
+
 logger = logging.getLogger(__name__)
 
 
@@ -58,7 +60,7 @@ class BaseJournal(ABC):
             if col not in shaped.columns:
                 shaped[col] = pd.NaT if col in self._datetime_columns else None
         for col in self._datetime_columns:
-            shaped[col] = pd.to_datetime(shaped[col], errors="coerce", utc=True)
+            shaped[col] = to_ist_series(shaped[col])
         return shaped[self._columns]
 
     def _read_parquet(self) -> pd.DataFrame:
