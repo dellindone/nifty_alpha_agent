@@ -87,7 +87,7 @@ def main() -> None:
     Paths.DATA_DIRS["nifty"].mkdir(parents=True, exist_ok=True)
     Path("tokens").mkdir(exist_ok=True)
     if args.live:
-        engine = Engine(instrument="NIFTY", artifacts_dir=Paths.MODELS_LIVE, live=True)
+        engine = Engine(instrument="NIFTY", artifacts_dir=Paths.MODELS_LIVE, live=True, dry_run=args.dry_run)
     else:
         engine = Engine(instrument="NIFTY", artifacts_dir=Paths.MODELS_SHADOW, live=False)
     engine.run()

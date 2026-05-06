@@ -28,7 +28,7 @@ from utils.market_calendar import is_trading_day
 
 logger = logging.getLogger(__name__)
 class Engine:
-    def __init__(self, instrument: str, artifacts_dir: str | Path, tick_stream=None, live: bool = False) -> None:
+    def __init__(self, instrument: str, artifacts_dir: str | Path, tick_stream=None, live: bool = False, dry_run: bool = False) -> None:
         self.instrument = instrument.upper()
         path = Path(artifacts_dir)
         self.artifacts_dir = path if path.is_absolute() else (Paths.ROOT / path).resolve()
@@ -44,7 +44,7 @@ class Engine:
         self.health_monitor = HealthMonitor(self.health, self.reporter)
         if live:
             from live_mode import LiveModeExecutor
-            self.shadow_mode = LiveModeExecutor(journal=self.journal, capital_tracker=self.capital_tracker, health=self.health)
+            self.shadow_mode = LiveModeExecutor(journal=self.journal, capital_tracker=self.capital_tracker, health=self.health, dry_run=dry_run)
         else:
             self.shadow_mode = ShadowModeExecutor(journal=self.journal, capital_tracker=self.capital_tracker)
         self._running, self._last_daily_pnl, self._last_daily_count = True, 0.0, 0

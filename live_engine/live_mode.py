@@ -19,12 +19,31 @@ logger = logging.getLogger(__name__)
 
 
 class LiveModeExecutor:
-    def __init__(self, journal, capital_tracker: CapitalTracker, health=None) -> None:
+    def __init__(self, journal, capital_tracker: CapitalTracker, health=None, dry_run: bool = False) -> None:
         self.journal = journal; self.capital_tracker = capital_tracker; self.health = health; self.model_version = os.getenv("MODEL_VERSION", "v1.0")
         self.broker_name = Trading.BROKER_NAME; self.account_name = Trading.ACCOUNT_NAME; self.segment = Segment.FNO
+        self._dry_run = dry_run
+        self._dry_fill_prices: dict[str, float] = {}
         self.broker = BrokerFactory.create(self.broker_name); self._engine = get_engine(); self._open: dict[str, LiveTrade] = {}; self._pending: dict[str, PendingEntry] = {}; restore_open_trades(self)
 
     def _broker_call(self, name: str, *args):
+        if self._dry_run:
+            if name == "place_order":
+                fake_id = f"DRY-{uuid4()}"
+                logger.info("[DRY-RUN] broker.%s skipped symbol=%s → order_id=%s", name, args[0] if args else "", fake_id)
+                return {"order_id": fake_id}
+            if name == "get_order_executed_price":
+                order_id = str(args[0]) if args else ""
+                price = self._dry_fill_prices.pop(order_id, None)
+                logger.info("[DRY-RUN] broker.%s order_id=%s → %.2f", name, order_id, price or 0.0)
+                return price
+            if name == "get_order_status":
+                return "TRADED"
+            if name == "cancel_order":
+                logger.info("[DRY-RUN] broker.%s skipped order_id=%s", name, args[0] if args else "")
+                return {}
+            logger.info("[DRY-RUN] broker.%s skipped args=%s", name, args)
+            return {}
         try:
             result = getattr(self.broker, name)(*args)
             if self.health: self.health.update("broker_api", "ok", "")
@@ -40,6 +59,8 @@ class LiveModeExecutor:
         trade_id = str(uuid4()); required_margin = float(signal.entry_premium) * int(signal.lot_size) * int(signal.lots)
         if self.capital_tracker.get_available_capital() < required_margin or not self.capital_tracker.reserve_margin(trade_id, required_margin): return None
         result = self._broker_call("place_order", option_symbol, int(signal.lot_size) * int(signal.lots), TransactionType.BUY, OrderType.MARKET, self.segment, Product.NRML)
+        if self._dry_run:
+            self._dry_fill_prices[result["order_id"]] = float(signal.entry_premium)
         trade = LiveTrade(trade_id=trade_id, signal=signal, entry_time=datetime.now(timezone.utc), current_sl=float(signal.entry_premium) - float(signal.sl_price), highest_premium=float(signal.entry_premium), current_target=float(signal.entry_premium) + float(signal.target_price), option_symbol=str(option_symbol).upper(), broker_order_id=result.get("order_id"), lots=int(signal.lots))
         self._open[trade_id] = trade; upsert_live_trade(self._engine, _live_row(self, trade)); return trade
 
@@ -60,6 +81,8 @@ class LiveModeExecutor:
             if trade.trail_active: trade.current_sl = max(trade.current_sl, trade.highest_premium - float(trade.signal.sl_price) * cfg.trail_width_mult)
             if premium <= trade.current_sl:
                 result = self._broker_call("place_order", trade.option_symbol, int(trade.signal.lot_size) * int(trade.lots), TransactionType.SELL, OrderType.MARKET, self.segment, Product.NRML)
+                if self._dry_run:
+                    self._dry_fill_prices[result["order_id"]] = premium
                 trade.broker_exit_order_id, trade.trade_state, trade.exit_reason = result.get("order_id"), "SL_HIT", "TRAIL_SL" if trade.trail_active else "SL_HIT"
             upsert_live_trade(self._engine, _live_row(self, trade))
         return closed
@@ -80,6 +103,8 @@ class LiveModeExecutor:
                 continue
             if trade.trade_state != "OPEN": continue
             result = self._broker_call("place_order", trade.option_symbol, int(trade.signal.lot_size) * int(trade.lots), TransactionType.SELL, OrderType.MARKET, self.segment, Product.NRML)
+            if self._dry_run:
+                self._dry_fill_prices[result["order_id"]] = float(current_premiums.get(trade.signal.instrument.upper(), trade.signal.entry_premium))
             trade.broker_exit_order_id, trade.exit_reason = result.get("order_id"), reason; info = confirm_exit_fill(self, trade, now)
             if info: closed.append(info)
         return closed
