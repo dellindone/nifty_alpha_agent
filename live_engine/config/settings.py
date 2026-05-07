@@ -40,7 +40,7 @@ class Equity:
     # ── Fallback signal thresholds (use INSTRUMENT_CONFIGS for per-instrument) ──
     MIN_CONFIDENCE     = 0.55
     MIN_RR             = 1.2
-    MAX_TRADES_PER_DAY = 6
+    MAX_TRADES_PER_DAY = 5
     DAILY_TARGET       = 5_000
     SPREAD_THRESHOLD_PCT = 2.0
 
@@ -65,9 +65,9 @@ INSTRUMENT_CONFIGS: dict[str, InstrumentConfig] = {
     "NIFTY": InstrumentConfig(
         min_confidence=0.60,
         min_rr=1.2,
-        max_trades_per_day=6,
-        daily_target=8_000,
-        daily_loss_limit=5_000,
+        max_trades_per_day=5,
+        daily_target=7_000,
+        daily_loss_limit=3_000,
         max_lots=1,
         abs_sl_max=9999,
         atr_mult_scale=1.25,
@@ -111,4 +111,4 @@ class Logging:
 class Trading:
     BROKER_NAME     = os.getenv("BROKER_NAME", "fyers")
     ACCOUNT_NAME    = os.getenv("ACCOUNT_NAME", "")
-    INITIAL_CAPITAL = float(os.getenv("INITIAL_CAPITAL", "24000"))
+    INITIAL_CAPITAL = float(os.getenv("INITIAL_CAPITAL", "21000"))
