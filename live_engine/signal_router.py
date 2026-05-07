@@ -20,9 +20,9 @@ class SignalRouter:
             self._e._last_decision = f"SIGNAL_{trade_signal.option_type}_NO_OPTION_SYMBOL"
             return trade_signal.option_type
         with self._e._tick_lock:
-            before = set(self._e.shadow_mode.get_pending_symbols())
-            pending = None if self._e.shadow_mode.open_trades() else self._e.shadow_mode.set_pending(trade_signal, option_symbol)
-            after = set(self._e.shadow_mode.get_pending_symbols())
+            before = set(self._e.executor.get_pending_symbols())
+            pending = None if self._e.executor.open_trades() else self._e.executor.set_pending(trade_signal, option_symbol)
+            after = set(self._e.executor.get_pending_symbols())
         for symbol in sorted(before - after):
             with self._e._tick_lock:
                 self._e._unsubscribe_if_unused(symbol)

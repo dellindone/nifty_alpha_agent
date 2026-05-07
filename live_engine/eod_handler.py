@@ -27,11 +27,11 @@ class EODHandler:
                 logger.error("send_exit_alert failed: %s", exc)
 
         date_key = now_ist.date().isoformat()
-        if is_trading_day(now_ist.date()) and now_ist.hour == 15 and now_ist.minute >= 30 and self._e._eod_closed_on != date_key:
+        if is_trading_day(now_ist.date()) and now_ist.hour == 15 and now_ist.minute >= 25 and self._e._eod_closed_on != date_key:
             try:
                 with self._e._tick_lock:
                     current_premiums = self._current_premiums_for_open_trades()
-                    closed_exits = self._e.shadow_mode.force_close_all(current_premiums=current_premiums, reason="EOD")
+                    closed_exits = self._e.executor.force_close_all(current_premiums=current_premiums, reason="EOD")
                     for exit_info in closed_exits:
                         _send_exit_alert(exit_info)
                     for symbol in list(self._e._subscribed_symbols):

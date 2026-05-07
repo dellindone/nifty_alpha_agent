@@ -24,7 +24,7 @@ class BaseReporter(ABC):
     def __init__(self, telegram_token: str = "", telegram_chat_id: str = "", mode: str = "") -> None:
         self.telegram_token   = str(telegram_token   or Logging.TELEGRAM_BOT_TOKEN)
         self.telegram_chat_id = str(telegram_chat_id or Logging.TELEGRAM_CHAT_ID)
-        self.mode = str(mode or os.getenv("AGENT_MODE", "SHADOW")).upper()
+        self.mode = str(mode or os.getenv("AGENT_MODE", "LIVE")).upper()
 
     # ── Abstract interface ────────────────────────────────────────────────────
 
@@ -41,7 +41,7 @@ class BaseReporter(ABC):
 
     def send_engine_start_alert(self, instrument: str, started_at: datetime) -> None:
         local = started_at.astimezone(IST) if started_at.tzinfo else IST.localize(started_at)
-        mode_label = "Paper/Shadow" if self.mode == "SHADOW" else "Live Trading"
+        mode_label = "Replay" if self.mode == "REPLAY" else "Live Trading"
         self._send(
             f"🟢 {instrument} AGENT STARTED\n"
             f"Started: {local.strftime('%d-%b-%Y %H:%M:%S IST')}\n"

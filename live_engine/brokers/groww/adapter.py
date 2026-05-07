@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Mapping, Sequence
 
 from brokers.base import BrokerAdapter, OrderType, Product, Segment, TransactionType
 from brokers.groww.auth import GrowwAuth
@@ -53,3 +54,53 @@ class GrowwAdapter(BrokerAdapter):
 
     def get_positions(self) -> list[dict]:
         return self._api().get_positions()
+
+    def get_available_balance(self) -> float | None:
+        api = self._api()
+        for method_name in ("get_fund_limits", "get_funds", "get_balance", "get_available_balance", "funds", "balance"):
+            method = getattr(api, method_name, None)
+            if callable(method):
+                try:
+                    response = method()
+                except Exception as exc:
+                    logger.warning("broker %s failed while reading funds: %s", method_name, exc)
+                    continue
+                balance = self._extract_available_balance(response)
+                if balance is not None:
+                    logger.info("broker funds groww available_balance=%s via %s", balance, method_name)
+                    return balance
+        logger.warning("broker funds groww unavailable from client")
+        return None
+
+    def _extract_available_balance(self, payload) -> float | None:
+        priority_keys = (
+            "available_balance",
+            "availableBalance",
+            "availableFunds",
+            "available_funds",
+            "available_cash",
+            "availableCash",
+            "withdrawable_balance",
+            "withdrawableBalance",
+            "clearCash",
+            "clear_cash",
+            "balance",
+            "cash",
+        )
+        if isinstance(payload, Mapping):
+            for key in priority_keys:
+                if key in payload:
+                    try:
+                        return float(payload[key])
+                    except (TypeError, ValueError):
+                        pass
+            for value in payload.values():
+                found = self._extract_available_balance(value)
+                if found is not None:
+                    return found
+        elif isinstance(payload, Sequence) and not isinstance(payload, (str, bytes, bytearray)):
+            for item in payload:
+                found = self._extract_available_balance(item)
+                if found is not None:
+                    return found
+        return None

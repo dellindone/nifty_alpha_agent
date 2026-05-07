@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Mapping, Sequence
 
 from brokers.base import BrokerAdapter, OrderType, Product, Segment, TransactionType
 from brokers.fyers.auth import FyersAuth
@@ -54,3 +55,41 @@ class FyersAdapter(BrokerAdapter):
 
     def get_positions(self) -> list[dict]:
         return self._client().positions().get("netPositions", [])
+
+    def get_available_balance(self) -> float | None:
+        response = self._client().funds()
+        balance = self._extract_available_balance(response)
+        logger.info("broker funds fyers available_balance=%s", balance)
+        return balance
+
+    def _extract_available_balance(self, payload) -> float | None:
+        priority_keys = (
+            "available_balance",
+            "availableBalance",
+            "availableFunds",
+            "available_funds",
+            "equityAmount",
+            "equity_amount",
+            "netAvailable",
+            "net_available",
+            "balance",
+            "fund_balance",
+            "fundBalance",
+        )
+        if isinstance(payload, Mapping):
+            for key in priority_keys:
+                if key in payload:
+                    try:
+                        return float(payload[key])
+                    except (TypeError, ValueError):
+                        pass
+            for value in payload.values():
+                found = self._extract_available_balance(value)
+                if found is not None:
+                    return found
+        elif isinstance(payload, Sequence) and not isinstance(payload, (str, bytes, bytearray)):
+            for item in payload:
+                found = self._extract_available_balance(item)
+                if found is not None:
+                    return found
+        return None

@@ -20,7 +20,7 @@ class Display:
         sep = "━" * 63
         thin = "─" * 63
         trade_lines: list[str] = []
-        for snap in self._e.shadow_mode.open_trade_display_snapshots():
+        for snap in self._e.executor.open_trade_display_snapshots():
             opt, stk, expiry_date = snap["option_type"], snap["strike"], snap["expiry_date"]
             exp_label = f"{self._e.instrument}{expiry_date.day:02d}{expiry_date.strftime('%b').upper()}{stk}{opt}" if hasattr(expiry_date, "strftime") else f"{opt}{stk}"
             entry, sl, tp, lot_size, lots = snap["entry_premium"], snap["current_sl"], snap["current_target"], snap["lot_size"], snap["lots"]
@@ -69,7 +69,7 @@ class Display:
         lines = [
             sep,
             f"  {'▲' if price > 0 else '─'}  {self._e.instrument}  {price:>10,.2f}    {time_str}    polls: {self._e._poll_count}",
-            f"  VIX  {self._e._last_vix:.1f}   ATR  {self._e._last_atr:.1f}    OPEN  {len(self._e.shadow_mode.open_trades())}    CAP  ₹{capital:,.0f}",
+            f"  VIX  {self._e._last_vix:.1f}   ATR  {self._e._last_atr:.1f}    OPEN  {len(self._e.executor.open_trades())}    CAP  ₹{capital:,.0f}",
             f"  {model_tag}    target ₹{cfg.daily_target:,}   stop ₹{cfg.daily_loss_limit:,}   day {pnl_color}{pnl_sign}₹{day_pnl:,.0f}{pnl_reset}",
             thin,
             *health_rows,

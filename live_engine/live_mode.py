@@ -11,16 +11,15 @@ from config.settings import Trading
 from db import get_engine, upsert_live_trade
 from live_mode_fills import _live_row, confirm_entry_fill, confirm_exit_fill
 from live_mode_restore import restore_open_trades
-from live_mode_types import LiveTrade
+from live_mode_types import LiveTrade, PendingEntry
 from risk.capital_tracker import CapitalTracker
-from shadow_mode import PendingEntry
 
 logger = logging.getLogger(__name__)
 
 
 class LiveModeExecutor:
-    def __init__(self, journal, capital_tracker: CapitalTracker, health=None, dry_run: bool = False) -> None:
-        self.journal = journal; self.capital_tracker = capital_tracker; self.health = health; self.model_version = os.getenv("MODEL_VERSION", "v1.0")
+    def __init__(self, journal, capital_tracker: CapitalTracker, reporter=None, health=None, dry_run: bool = False) -> None:
+        self.journal = journal; self.capital_tracker = capital_tracker; self.reporter = reporter; self.health = health; self.model_version = os.getenv("MODEL_VERSION", "v1.0")
         self.broker_name = Trading.BROKER_NAME; self.account_name = Trading.ACCOUNT_NAME; self.segment = Segment.FNO
         self._dry_run = dry_run
         self._dry_fill_prices: dict[str, float] = {}
@@ -39,6 +38,8 @@ class LiveModeExecutor:
                 return price
             if name == "get_order_status":
                 return "TRADED"
+            if name == "get_available_balance":
+                return float(self.capital_tracker.get_available_capital())
             if name == "cancel_order":
                 logger.info("[DRY-RUN] broker.%s skipped order_id=%s", name, args[0] if args else "")
                 return {}
@@ -57,7 +58,23 @@ class LiveModeExecutor:
         instrument = signal.instrument.upper()
         if any(t.signal.instrument.upper() == instrument for t in self._open.values()) or any(p.signal.instrument.upper() == instrument for p in self._pending.values()): return None
         trade_id = str(uuid4()); required_margin = float(signal.entry_premium) * int(signal.lot_size) * int(signal.lots)
-        if self.capital_tracker.get_available_capital() < required_margin or not self.capital_tracker.reserve_margin(trade_id, required_margin): return None
+        available_balance = self._available_balance_for_entry()
+        if available_balance is not None and float(available_balance) < required_margin:
+            self._send_insufficient_balance_alert(
+                instrument=instrument,
+                required_margin=required_margin,
+                available_balance=float(available_balance),
+                option_symbol=option_symbol,
+            )
+            return None
+        if self.capital_tracker.get_available_capital() < required_margin or not self.capital_tracker.reserve_margin(trade_id, required_margin):
+            self._send_insufficient_balance_alert(
+                instrument=instrument,
+                required_margin=required_margin,
+                available_balance=float(self.capital_tracker.get_available_capital()),
+                option_symbol=option_symbol,
+            )
+            return None
         result = self._broker_call("place_order", option_symbol, int(signal.lot_size) * int(signal.lots), TransactionType.BUY, OrderType.MARKET, self.segment, Product.NRML)
         if self._dry_run:
             self._dry_fill_prices[result["order_id"]] = float(signal.entry_premium)
@@ -129,3 +146,41 @@ class LiveModeExecutor:
         return expired
     def open_trade_display_snapshots(self) -> list[dict]:
         return [{"option_type": str(t.signal.option_type), "strike": int(t.signal.strike), "expiry_date": t.signal.expiry_date, "entry_premium": float(t.fill_price or t.signal.entry_premium), "current_sl": float(t.current_sl), "current_target": float(t.current_target), "lot_size": int(t.signal.lot_size), "lots": int(t.lots), "entry_time": t.entry_time, "confidence": float(t.signal.confidence), "option_symbol": t.option_symbol} for t in self._open.values()]
+
+    def _available_balance_for_entry(self) -> float | None:
+        balance = None
+        try:
+            balance = self._broker_call("get_available_balance")
+        except Exception as exc:
+            logger.warning("broker balance lookup failed broker=%s error=%s", self.broker_name, exc)
+        if balance is None:
+            balance = float(self.capital_tracker.get_available_capital())
+        return None if balance is None else float(balance)
+
+    def _send_insufficient_balance_alert(
+        self,
+        *,
+        instrument: str,
+        required_margin: float,
+        available_balance: float,
+        option_symbol: str = "",
+    ) -> None:
+        logger.warning(
+            "live_entry_skipped_low_balance broker=%s instrument=%s required=%.2f available=%.2f option_symbol=%s",
+            self.broker_name,
+            instrument,
+            required_margin,
+            available_balance,
+            option_symbol,
+        )
+        if self.reporter is None:
+            return
+        self.reporter.send_health_alert(
+            "🚫 LIVE TRADE SKIPPED — LOW BALANCE\n"
+            f"Broker: {self.broker_name}\n"
+            f"Instrument: {instrument}\n"
+            f"Required: ₹{required_margin:,.2f}\n"
+            f"Available: ₹{available_balance:,.2f}\n"
+            f"Contract: {option_symbol or '-'}\n"
+            "Action: Order not placed."
+        )

@@ -1,7 +1,6 @@
 """Nifty Alpha Agent — entrypoint.
 
 Usage:
-    python main.py --shadow
     python main.py --live
     python main.py --replay --date 2026-05-04
     python main.py --replay --date 2026-05-04 --dataset /path/to/features.parquet
@@ -42,7 +41,6 @@ def _setup_logging(verbose: bool) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Nifty Alpha Agent")
     mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument("--shadow", action="store_true", help="Paper trade")
     mode.add_argument("--live", action="store_true", help="Live trading")
     mode.add_argument("--replay", action="store_true", help="Replay historical date through live pipeline")
     parser.add_argument("--date", default=None, help="Date to replay: YYYY-MM-DD (required with --replay)")
@@ -55,13 +53,13 @@ def main() -> None:
     if args.replay:
         if not args.date:
             parser.error("--replay requires --date YYYY-MM-DD")
-        os.environ["AGENT_MODE"] = "SHADOW"
+        os.environ["AGENT_MODE"] = "REPLAY"
         _setup_logging(args.verbose)
         from config.settings import Paths
         from replay import ReplayRunner
         runner = ReplayRunner(
             instrument="NIFTY",
-            artifacts_dir=Paths.MODELS_SHADOW,
+            artifacts_dir=Paths.MODELS_LIVE,
             replay_date=args.date,
             dataset_path=args.dataset,
             speed=args.speed,
@@ -69,7 +67,7 @@ def main() -> None:
         runner.run()
         return
 
-    os.environ["AGENT_MODE"] = "LIVE" if args.live else "SHADOW"
+    os.environ["AGENT_MODE"] = "LIVE"
     _setup_logging(args.verbose)
     _lock_path = Path("/tmp/nifty_alpha_agent.lock")
     if _lock_path.exists():
@@ -95,10 +93,7 @@ def main() -> None:
     from engine import Engine
     Paths.DATA_DIRS["nifty"].mkdir(parents=True, exist_ok=True)
     Path("tokens").mkdir(exist_ok=True)
-    if args.live:
-        engine = Engine(instrument="NIFTY", artifacts_dir=Paths.MODELS_LIVE, live=True, dry_run=args.dry_run)
-    else:
-        engine = Engine(instrument="NIFTY", artifacts_dir=Paths.MODELS_SHADOW, live=False)
+    engine = Engine(instrument="NIFTY", artifacts_dir=Paths.MODELS_LIVE, live=True, dry_run=args.dry_run)
     engine.run()
 
 

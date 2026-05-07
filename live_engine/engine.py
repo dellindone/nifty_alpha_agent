@@ -16,7 +16,6 @@ from lib.reporter import Reporter
 from lib.signal_handler import SignalHandler
 from health import AgentHealth
 from health_monitor import HealthMonitor
-from shadow_mode import ShadowModeExecutor
 from signal_router import SignalRouter
 from tick_handler import TickHandler
 from config.instruments import FYERS_SYMBOL
@@ -42,11 +41,14 @@ class Engine:
         self.reporter = Reporter(self.journal, self.capital_tracker, os.getenv("TELEGRAM_BOT_TOKEN", ""), os.getenv("TELEGRAM_CHAT_ID", ""))
         self.health = AgentHealth()
         self.health_monitor = HealthMonitor(self.health, self.reporter)
-        if live:
-            from live_mode import LiveModeExecutor
-            self.shadow_mode = LiveModeExecutor(journal=self.journal, capital_tracker=self.capital_tracker, health=self.health, dry_run=dry_run)
-        else:
-            self.shadow_mode = ShadowModeExecutor(journal=self.journal, capital_tracker=self.capital_tracker)
+        from live_mode import LiveModeExecutor
+        self.executor = LiveModeExecutor(
+            journal=self.journal,
+            capital_tracker=self.capital_tracker,
+            reporter=self.reporter,
+            health=self.health,
+            dry_run=dry_run,
+        )
         self._running, self._last_daily_pnl, self._last_daily_count = True, 0.0, 0
         self._eod_closed_on = self._summary_sent_on = self._daily_target_alerted_on = self._started_at_ist = self._last_hourly_heartbeat_key = None
         self._tick_stream = tick_stream if tick_stream is not None else fyers_tick_stream
@@ -73,7 +75,7 @@ class Engine:
     def _setup(self) -> None:
         """Initialise runtime state and subscribe to symbols. Called before _run_loop()."""
         self._started_at_ist = datetime.now(IST)
-        open_trades = self.shadow_mode.open_trades()
+        open_trades = self.executor.open_trades()
         self.reporter.send_startup_summary(
             self.instrument, self._started_at_ist,
             [{"instrument": t.signal.instrument, "option_type": t.signal.option_type,

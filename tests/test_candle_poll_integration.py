@@ -17,7 +17,7 @@ def _engine():
     e = SimpleNamespace()
     e._tick_lock = _L(); e._poll_count = 0; e.instrument = "NIFTY"; e._last_decision = ""; e._daily_target_alerted_on = None
     e._last_pred_data = {}; e._last_vix = e._last_atr = e._last_daily_pnl = 0.0; e._last_daily_count = 0
-    e.health = SimpleNamespace(update=MagicMock()); e.shadow_mode = SimpleNamespace(cancel_expired_pending=lambda _: [], open_trades=lambda: [])
+    e.health = SimpleNamespace(update=MagicMock()); e.executor = SimpleNamespace(cancel_expired_pending=lambda _: [], open_trades=lambda: [])
     e._unsubscribe_if_unused = MagicMock(); e._log_poll = MagicMock(); e._print_live_display = MagicMock()
     e.predictor = SimpleNamespace(selected_features=["close", "vix", "atr_14", "session_bar"], predict=MagicMock())
     e.signal_handler = SimpleNamespace(process=MagicMock(), last_block_reason="")
@@ -42,7 +42,7 @@ def test_candle_poll_end_to_end_paths():
     e._handle_trade_signal.assert_called_once()
     assert e.predictor.predict.call_args.args[0].index[0] == ff.index[-2]
     e.signal_handler.process.reset_mock()
-    e.shadow_mode.open_trades = lambda: [object()]
+    e.executor.open_trades = lambda: [object()]
     e.journal.open_trades = lambda: []
     with patch.object(cp, "_fetch_live_frames", return_value={"5m": ff}), patch("candle_poll.build_feature_frame", return_value=ff):
         cp._run_candle_poll(datetime(2026, 5, 4, 10, 5))

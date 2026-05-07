@@ -23,8 +23,8 @@ no shared code with banknifty or sensex agents.
 
 ### Entrypoint
 ```
-python main.py --shadow    # paper trade
 python main.py --live      # live trading
+python main.py --replay --date 2026-05-04
 ```
 
 ### Module ownership — read only what you need
@@ -37,7 +37,7 @@ python main.py --live      # live trading
 | EOD close, heartbeat, schedule | `live_engine/eod_handler.py` |
 | Candle poll, frame fetch, daily P&L | `live_engine/candle_poll.py` |
 | Main loop, init, sleep | `live_engine/engine.py` |
-| Trade lifecycle, SL/trail/exit | `live_engine/shadow_mode.py` |
+| Trade lifecycle, fills, SL/trail/exit | `live_engine/live_mode.py` |
 | Parquet + DB persistence | `live_engine/lib/journal.py` |
 | Telegram alerts | `live_engine/lib/reporter.py` |
 | Entry signal filtering | `live_engine/lib/signal_handler.py` |

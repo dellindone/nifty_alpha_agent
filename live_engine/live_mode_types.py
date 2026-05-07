@@ -5,6 +5,15 @@ from lib.signal_handler import TradeSignal
 
 
 @dataclass
+class PendingEntry:
+    signal: TradeSignal
+    entry_price: float
+    option_symbol: str
+    created_at: datetime
+    expires_at: datetime
+
+
+@dataclass
 class LiveTrade:
     trade_id: str
     signal: TradeSignal

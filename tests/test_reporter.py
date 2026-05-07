@@ -27,7 +27,7 @@ def _upsert(engine, row):
 @pytest.fixture
 def rep(tmp_path, monkeypatch):
     eng = create_engine("sqlite+pysqlite:///:memory:", future=True, connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    monkeypatch.setenv("AGENT_MODE", "SHADOW")
+    monkeypatch.setenv("AGENT_MODE", "REPLAY")
     monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///:memory:")
     monkeypatch.setattr(jm, "get_engine", lambda: eng)
     monkeypatch.setattr(cm, "get_engine", lambda: eng)

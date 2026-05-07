@@ -1,4 +1,4 @@
-"""Shadow trade journal with DB-primary and parquet-backup persistence."""
+"""Trade journal with DB-primary and parquet-backup persistence."""
 
 from __future__ import annotations
 
@@ -118,7 +118,7 @@ class Journal(BaseJournal):
 
     def __init__(self, data_dir: Path) -> None:
         super().__init__(data_dir, "trades.parquet")
-        self._is_live = os.getenv("AGENT_MODE", "SHADOW").upper() == "LIVE"
+        self._is_live = os.getenv("AGENT_MODE", "LIVE").upper() == "LIVE"
         self._trade_table = live_trade if self._is_live else paper_trade
         self._upsert_fn = upsert_live_trade if self._is_live else upsert_trade
         self._engine = None

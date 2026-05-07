@@ -1,4 +1,4 @@
-"""Telegram reporter for shadow trading signals, exits, and daily summaries."""
+"""Telegram reporter for signals, exits, and daily summaries."""
 
 from __future__ import annotations
 

@@ -36,13 +36,13 @@ class TickHandler:
                 self._e._last_index_price = price
                 self._e._print_live_display(datetime.now(IST))
                 return
-            trade = self._e.shadow_mode.check_pending_fill(symbol_key, price, now_utc)
+            trade = self._e.executor.check_pending_fill(symbol_key, price, now_utc)
             if trade is not None:
                 self._e._unsubscribe_if_unused(symbol_key)
                 self._e._ensure_subscribed([symbol_key])
                 self._e.reporter.send_signal_alert(trade.signal)
                 self._e._last_decision = f"ENTERED_{trade.signal.option_type}_AT_{price:.0f}"
-            closed_exits = self._e.shadow_mode.tick(instrument=self._e.instrument, current_premium=price, current_time=now_utc)
+            closed_exits = self._e.executor.tick(instrument=self._e.instrument, current_premium=price, current_time=now_utc)
             self._e._last_current_premiums[symbol_key] = price
             self._e._last_current_premiums[self._e.instrument] = price
             for exit_info in closed_exits:
@@ -69,7 +69,7 @@ class TickHandler:
         symbol_key = str(symbol).upper()
         if symbol_key == FYERS_SYMBOL[self._e.instrument].upper():
             return
-        pending_symbols = {str(s).upper() for s in self._e.shadow_mode.get_pending_symbols()}
+        pending_symbols = {str(s).upper() for s in self._e.executor.get_pending_symbols()}
         open_symbols = set(self._e._get_open_trade_symbols())
         if symbol_key in pending_symbols or symbol_key in open_symbols or symbol_key not in self._e._subscribed_symbols:
             return
